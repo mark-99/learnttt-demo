@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- GitHub Pages cannot emit COOP/COEP headers, so this service worker must
+         be the first script. It enables SharedArrayBuffer and the threaded WASM
+         engine after the worker's one-time registration reload. -->
+    <script src="coi-serviceworker.js"></script>
+    <!-- The public Pages root is the showcase. Preserve explicit query strings
+         so the in-app "Advanced view" link can still remove demo=1. -->
+    <script>
+      if (window.location.search === "") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("demo", "1");
+        window.history.replaceState(null, "", url);
+      }
+    </script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>learnTTT Play</title>
+    <!-- Fonts are SELF-HOSTED (web/dm-fonts.css + web/fonts/*.woff2), not linked from
+         fonts.googleapis.com. Under COEP: require-corp (needed for the threaded WASM
+         bundle's SharedArrayBuffer, docs/PLAN-wasm-web-speedup.md §8.2) a cross-origin
+         font with no CORP header is blocked, so the Google Fonts <link> is removed. -->
+    <link rel="stylesheet" href="dm-fonts.css" />
+    <link rel="stylesheet" href="style.css"/>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <!-- Demo <-> Advanced mode switch; label + target set by app.js init() (present in both
+             modes). Starts hidden so it never flashes empty before the module script wires it. -->
+        <a id="modeToggle" class="mode-toggle" hidden></a>
+        <div class="eyebrow">Interactive</div>
+        <h1><span class="title-brand">learnTTT</span> <span class="title-sep">&mdash;</span> Browser Play</h1>
+        <!-- Advanced/dev copy is the default text; app.js init() swaps in data-demo under ?demo=1. -->
+        <p class="subtitle" id="pageSubtitle"
+           data-demo="Pick a game, then play the bundled best model — set a player to Heuristic, or watch Model vs Model. Everything runs in your browser; open the Advanced controls to load your own save.">
+          Load a save file and play against the best model. No training, just inference.
+        </p>
+      </header>
+
+      <section class="panel">
+        <div class="controls controls-files">
+          <label class="control">
+            <span>Save file</span>
+            <!-- Default to plain .sav so the picker shows only canonical (latest)
+                 saves. Compressed .zst checkpoints are hidden until the toggle below
+                 widens `accept` to ".sav,.zst" (app.js). Two simple tokens, never a
+                 compound ".sav.zst" — that re-triggers the Chromium/Firefox
+                 compound-extension picker bug. -->
+            <input id="saveFile" type="file" accept=".sav" />
+          </label>
+          <label class="toggle checkpoint-toggle" title="Also show compressed .zst checkpoint snapshots in the file picker">
+            <input id="showCheckpoints" type="checkbox" />
+            <span>Show checkpoints (.zst)</span>
+          </label>
+          <label class="control">
+            <span>Sweep CSV</span>
+            <input id="sweepFile" type="file" accept=".csv" />
+          </label>
+        </div>
+
+        <div class="player-panels">
+          <div class="player-config" data-player="1">
+            <div class="player-header">Player 1</div>
+            <label class="control">
+              <span>Type</span>
+              <select class="player-type">
+                <option value="human">Human</option>
+                <option value="model">Model</option>
+                <option value="heuristic">Heuristic</option>
+              </select>
+            </label>
+            <div class="model-params">
+              <label class="control">
+                <span>Model</span>
+                <select class="player-model-select" disabled>
+                  <option value="0">Best by Elo</option>
+                  <option value="1">Best by Playoff</option>
+                  <option value="2">Best vs Heuristic</option>
+                </select>
+              </label>
+              <label class="control">
+                <span>Elo Rank</span>
+                <input class="player-elo-rank" type="number" min="1" value="1" disabled />
+              </label>
+              <label class="control">
+                <span>MCTS sims</span>
+                <select class="player-strength"></select>
+              </label>
+            </div>
+            <div class="heuristic-params">
+              <label class="control">
+                <span>Lookahead</span>
+                <select class="player-strength"></select>
+              </label>
+            </div>
+          </div>
+
+          <button id="swapSides" class="swap-sides-btn" title="Swap sides">&#8644;</button>
+
+          <div class="player-config" data-player="2">
+            <div class="player-header">Player 2</div>
+            <label class="control">
+              <span>Type</span>
+              <select class="player-type">
+                <option value="human">Human</option>
+                <option value="model" selected>Model</option>
+                <option value="heuristic">Heuristic</option>
+              </select>
+            </label>
+            <div class="model-params">
+              <label class="control">
+                <span>Model</span>
+                <select class="player-model-select" disabled>
+                  <option value="0">Best by Elo</option>
+                  <option value="1">Best by Playoff</option>
+                  <option value="2">Best vs Heuristic</option>
+                </select>
+              </label>
+              <label class="control">
+                <span>Elo Rank</span>
+                <input class="player-elo-rank" type="number" min="1" value="1" disabled />
+              </label>
+              <label class="control">
+                <span>MCTS sims</span>
+                <select class="player-strength"></select>
+              </label>
+            </div>
+            <div class="heuristic-params">
+              <label class="control">
+                <span>Lookahead</span>
+                <select class="player-strength"></select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls controls-actions">
+          <button id="newGame" class="primary" disabled>New Game</button>
+          <button id="undoMove" class="secondary" disabled>Undo</button>
+        </div>
+
+        <div id="autoplayControls" class="autoplay-controls" style="display:none;">
+          <div class="autoplay-buttons">
+            <button id="autoPlayBtn" class="secondary" title="Play">&#9654; Play</button>
+            <button id="autoPauseBtn" class="secondary" title="Pause" disabled>&#9208; Pause</button>
+            <button id="autoStepBtn" class="secondary" title="Step">&#9654;&#124; Step</button>
+          </div>
+          <label class="control autoplay-speed">
+            <span>Delay</span>
+            <input id="speedSlider" type="range" min="10" max="1000" step="10" value="500" />
+            <span id="speedLabel" class="speed-value">500ms</span>
+          </label>
+          <div class="autoplay-batch">
+            <label class="control">
+              <span>Games</span>
+              <input id="batchCount" type="number" min="1" max="10000" value="100" />
+            </label>
+            <label class="toggle batch-show-toggle">
+              <input id="batchShowGames" type="checkbox" checked />
+              <span>Show</span>
+            </label>
+            <button id="batchBtn" class="secondary">Batch</button>
+          </div>
+          <div id="batchScore" class="batch-score"></div>
+        </div>
+
+        <div class="meta">
+          <div id="gameInfo" class="meta-line">No save loaded.</div>
+          <div id="score" class="meta-line score"></div>
+          <div id="modelInfo" class="meta-line"></div>
+          <div id="trainingParams" class="meta-line training-params"></div>
+          <div id="playInfo" class="meta-line"></div>
+          <!-- Engine capability indicator (app.js renderEngineCapabilities): multi-thread state +
+               worker ceiling + optional caps (wasm SIMD / cross-origin isolation / SharedArrayBuffer)
+               + core count. Populated once the WASM engine is selected. -->
+          <div id="capabilities" class="meta-line capabilities"></div>
+          <div id="sweepInfo" class="meta-line sweep-info"></div>
+          <div class="status-area">
+            <!-- Rolling history of the last few status messages (app.js pushStatusHistory) so a
+                 quick player's move doesn't immediately scroll the previous message away. -->
+            <div id="statusHistory" class="status-history"></div>
+            <div id="status" class="meta-line">Waiting for a save file.</div>
+          </div>
+          <div id="error" class="meta-line error"></div>
+        </div>
+      </section>
+
+      <main class="layout">
+        <section class="panel board-panel">
+          <div id="board" class="board"></div>
+          <div id="othelloScoreBars" class="othello-score-bars">
+            <div class="score-row black-row">
+              <span class="score-label">Black</span>
+              <div class="score-bar-container">
+                <div class="score-bar black-bar"></div>
+              </div>
+              <span class="score-count black-count">2</span>
+            </div>
+            <div class="score-row white-row">
+              <span class="score-label">White</span>
+              <div class="score-bar-container">
+                <div class="score-bar white-bar"></div>
+              </div>
+              <span class="score-count white-count">2</span>
+            </div>
+            <div class="winner-display"></div>
+          </div>
+        </section>
+
+        <section class="panel graph-panel">
+          <div class="graph-header">
+            <div>
+              <h2>Model graph</h2>
+              <p class="graph-subtitle">Nodes are layered left to right, weighted edges show signal flow.</p>
+            </div>
+            <div class="graph-header-right">
+              <select id="graphPlayerSelect" style="display:none;">
+                <option value="0">Auto</option>
+                <option value="1">Player 1</option>
+                <option value="2">Player 2</option>
+              </select>
+              <div id="graphStats" class="graph-stats">No model loaded.</div>
+            </div>
+          </div>
+          <div class="graph-controls">
+            <label class="control graph-mode">
+              <span>View</span>
+              <select id="graphMode">
+                <option value="topology">Topology</option>
+                <option value="activation">Activation (last AI move)</option>
+              </select>
+            </label>
+            <label class="control compact">
+              <span>Min |w|</span>
+              <input id="graphMinWeight" type="range" min="0" max="2" step="0.05" value="0" />
+              <span id="graphMinWeightValue" class="graph-value">0.00</span>
+            </label>
+            <label class="toggle">
+              <input id="graphShowDisabled" type="checkbox" checked />
+              <span>Show disabled</span>
+            </label>
+          </div>
+          <div class="graph-canvas">
+            <canvas id="graphCanvas"></canvas>
+          </div>
+        </section>
+
+        <section class="panel transcript-panel">
+          <div class="transcript-header">
+            <div>
+              <h2>Game transcript</h2>
+              <p class="transcript-subtitle">Self-describing move log for LLM analysis &mdash; copy or download to paste into a model.</p>
+            </div>
+            <div class="transcript-actions">
+              <button id="copyTranscriptBtn" class="secondary" disabled>Copy</button>
+              <button id="downloadTranscriptBtn" class="secondary" disabled>Download</button>
+            </div>
+          </div>
+          <pre id="transcriptText" class="transcript-text">No save loaded.</pre>
+        </section>
+      </main>
+    </div>
+
+    <!-- The engine factory is loaded DYNAMICALLY by app.js (§8.3): it feature-detects cross-origin
+         isolation + SharedArrayBuffer and injects either learnttt-threaded.js or learnttt.js. So
+         there is NO static <script src="learnttt.js"> here. This GitHub Pages deployment wires the
+         COI service-worker shim as the first head script per web/HOSTING.md. -->
+    <script type="module" src="app.js"></script>
+    <!-- Web-play demo controller (docs/PLAN-webui-demo-fbf243.md §7 Phase 3). ALWAYS loaded but
+         self-gates on ?demo=1 (a no-op in the dev app), so app.js never injects a script tag and the
+         §9 same-origin assertion stays clean. It runs AFTER app.js so window.__demo (assembled
+         synchronously in app.js init()) already exists; it reuses the engine via that seam, no fork. -->
+    <script type="module" src="demo.js"></script>
+  </body>
+</html>

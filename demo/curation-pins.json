@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "_comment": [
+    "Step-0 curation pins for the web demo (docs/PLAN-webui-demo-fbf243.md §3.1).",
+    "Human-authored candidate set the selector ranks WITHIN — not inferred by a script.",
+    "Best-per-game by BvH (champion==bvh aggregate_pct), except Othello (Edax, BvH saturated)",
+    "and TTT (solved, no sweep CSV). Board variant is read from each save header (game/board/win_length).",
+    "",
+    "KEY FINDING (amends the plan): the strong Hex/Gomoku nets are the alphazero-cnn topology",
+    "whose .sav is ~87% embedded replay buffer that the web loader NEVER reads (web/wasm_load.cpp:269",
+    "breaks at the 'replay_buffer' line). build-demo-bundle.sh must STRIP the replay buffer",
+    "(truncate at the marker; no-op if absent) BEFORE zstd. Sizes below are decimal MB (x1,000,000, matching capRawMB/capZstMB).",
+    "This drops Hex 11x11 280MB->36MB raw / 11.4MB zst",
+    "and Gomoku 11x11 269MB->37MB raw / 11.7MB zst, both under the 50MB-raw / 15MB-zst caps — so the demo",
+    "showcases the 99.5%/100%-BvH flagship nets on real board sizes instead of the weak size-viable ones",
+    "(Hex 11x11 non-cnn = 1.5% BvH; Gomoku 11x11 non-cnn = 37%). Stripped-save load MUST be verified in",
+    "the Phase-9 headless harness (game-type + board-variant + one move) — the new risk this introduces."
+  ],
+  "pipeline": {
+    "stripReplayBuffer": true,
+    "stripNote": "Truncate each source .sav at the byte offset of the 'replay_buffer' marker line (grep -aob) before compressing; no-op when the marker is absent (Othello C1 = 0% buffer; TTT NEAT). Loader builds the net from EMA>champion>learner, all of which precede the buffer.",
+    "capRawMB": 50,
+    "capZstMB": 15
+  },
+  "games": {
+    "ttt": {
+      "label": "Tic-Tac-Toe",
+      "boardVariant": { "width": 3, "height": 3, "winLength": 3 },
+      "metric": "none (solved; BvH trivially saturated)",
+      "csv": null,
+      "pin": "saves/ttt.sav.zst",
+      "strategy": "NEAT_POPULATION v4",
+      "evalSims": null,
+      "gatePly": null,
+      "strip": false,
+      "copyThrough": true,
+      "approxZstMB": 0.06,
+      "note": "30M-cycle NEAT champion the dev app ships; only canonical is already .zst (no raw ttt.sav) -> copy through, verify zstd -t. Documented BvH exception (no ttt-*-sweep.csv). Heuristic opponent N/A (supportsHeuristic:false) -> matchup is Human-vs-Model / Model-vs-Model only."
+    },
+    "connect4": {
+      "label": "Connect 4",
+      "boardVariant": { "width": 7, "height": 6, "winLength": 4 },
+      "metric": "bvh",
+      "csv": "saves/connect4-alphazero-ts100-steps100-sweep.csv",
+      "pin": "saves/connect4-alphazero-ts100-steps100.sav",
+      "strategy": "alphazero (NEAT-genome, h=192)",
+      "bvhPct": 99.0,
+      "evalSims": 6400,
+      "gatePly": null,
+      "strip": true,
+      "approxRawMB": 13.0,
+      "approxZstMB": 1.06,
+      "note": "Single 7x6/w4 board (heuristic era stable for C4). 99.0% BvH at 13MB raw -> ~1MB zst, no strip strictly needed but strip is a harmless no-cost shrink. Ties at 99.0%: connect4-alphazero-tsim400-sims400 (equal). The 100% cnn4x32-policy net exists but is 115MB and needs stripping for no BvH gain over 99.0% -> not chosen. Excluded stronger-but-larger: connect4-alphazero-rc500k-* (99.5% @ 48.7MB)."
+    },
+    "othello": {
+      "label": "Othello",
+      "boardVariant": { "width": 8, "height": 8, "winLength": 0 },
+      "metric": "edax",
+      "csv": "saves/othello-edax-ladder.csv",
+      "pin": "saves/othello-c1-7x64-ctrl-seed11.sav",
+      "strategy": "ALPHAZERO_CNN 7x64 (C1 ctrl, offline-corpus-trained)",
+      "edaxScoreVsL10": 0.568,
+      "evalSims": 12800,
+      "gatePly": null,
+      "strip": false,
+      "approxRawMB": 23.6,
+      "approxZstMB": 7.0,
+      "note": "BvH saturated for Othello (net beats ply-8 heuristic) -> ranked on the Edax ladder. Ship-certified champion (commit e31f11c: score vs Edax L10 = 0.568 PASS, +0.193 over incumbent). C1 nets carry NO replay buffer (0% -> strip is a no-op). DO NOT bundle othello-az-cnn7x64-edaxopp-L6 (~207MB, weaker)."
+    },
+    "hex": {
+      "label": "Hex",
+      "boardVariant": { "width": 11, "height": 11, "winLength": 0 },
+      "metric": "bvh",
+      "csv": "saves/hex-alphazero-11x11-rc500k-ep100-cnn5x48-sweep.csv",
+      "pin": "saves/hex-alphazero-11x11-rc500k-ep100-cnn5x48.sav",
+      "strategy": "ALPHAZERO_CNN cnn5x48",
+      "bvhPct": 99.5,
+      "evalSims": 3200,
+      "gatePly": null,
+      "strip": true,
+      "approxRawMB_full": 280.1,
+      "approxRawMB_stripped": 35.8,
+      "approxZstMB": 11.42,
+      "note": "Tournament-standard 11x11. Only board with a strong (99.5% BvH) net that is size-viable AFTER stripping (280MB->36MB raw / 11.4MB zst, decimal). Size-viable non-cnn 11x11 nets are unusable (1.5% BvH). 9x9 cnn is stronger-board but the nets are 180-370MB (bigger even stripped). REQUIRES the strip pipeline step."
+    },
+    "gomoku": {
+      "label": "Gomoku",
+      "boardVariant": { "width": 11, "height": 11, "winLength": 5 },
+      "metric": "bvh",
+      "csv": "saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48-sweep.csv",
+      "pin": "saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav",
+      "strategy": "ALPHAZERO_CNN cnn5x48",
+      "bvhPct": 100.0,
+      "evalSims": 3200,
+      "gatePly": null,
+      "strip": true,
+      "approxRawMB_full": 268.8,
+      "approxRawMB_stripped": 36.7,
+      "approxZstMB": 11.73,
+      "note": "11x11 win-5 (freestyle). 100% BvH cnn5x48 stripped 269MB->37MB raw / 11.7MB zst (decimal). Alt with equal BvH: -cnn5x48-ply4cont (same size; both saturate BvH at 100% so BvH can't separate them — base run chosen as canonical). 13x13 has only a 233MB cnn8x96 PBT champion at 97.4% (s100/ply3, different regime); 15x15 has no viable net. REQUIRES the strip pipeline step."
+    }
+  }
+}

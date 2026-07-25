@@ -1,0 +1,8 @@
+# Build/test sources copied with the complete web tree but not needed at runtime.
+__pycache__/
+*.pyc
+*.test.mjs
+demo/test/
+wasm_gameplay.cpp
+wasm_load.cpp
+wasm_state.h

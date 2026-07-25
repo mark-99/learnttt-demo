@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "generated": "2026-07-23T23:37:35Z",
+  "wasm": "../learnttt.wasm",
+  "_comment": "Web-play demo manifest (docs/PLAN-webui-demo-fbf243.md \u00a75). COPY (labels, order, matchups, sims, blurbs, source detail) is hand-authored and reviewed in git; the identity guards (gameType/boardWidth/boardHeight/winLength) plus bytes/rawBytes/sha256/model/source.canonical are STAMPED by scripts/build-demo-bundle.sh from web/demo/curation-pins.json + the built models. Re-running the build never clobbers copy.",
+  "games": [
+    {
+      "id": "ttt",
+      "label": "Tic-Tac-Toe",
+      "order": 1,
+      "gameType": 1,
+      "boardWidth": 3,
+      "boardHeight": 3,
+      "winLength": 3,
+      "model": "models/ttt.sav.zst",
+      "bytes": 61719,
+      "rawBytes": 206190,
+      "sha256": "b871ceb68f7dec4601d2a09175a3ce0883d05ba06e8996ab875cc2f5e21f4701",
+      "defaultMatchup": {
+        "p1": "human",
+        "p2": "model"
+      },
+      "neatMember": {
+        "selector": 0,
+        "eloRank": 1
+      },
+      "sims": 100,
+      "heuristicPly": null,
+      "blurb": "30M-cycle NEAT champion. Tic-Tac-Toe is solved, so it plays perfectly \u2014 draw it if you can.",
+      "source": {
+        "metric": "pinned",
+        "canonical": "saves/ttt.sav.zst",
+        "detail": "Solved game, BvH trivially saturated (no ttt-*-sweep.csv). Pinned champion the dev app ships; documented BvH exception (\u00a73.1). NEAT_POPULATION v4 \u2014 neatMember pins the champion member post-load. No heuristic opponent (supportsHeuristic:false)."
+      }
+    },
+    {
+      "id": "connect4",
+      "label": "Connect 4",
+      "order": 2,
+      "gameType": 2,
+      "boardWidth": 7,
+      "boardHeight": 6,
+      "winLength": 4,
+      "model": "models/connect4-alphazero-ts100-steps100.sav.zst",
+      "bytes": 895559,
+      "rawBytes": 4289807,
+      "sha256": "d825e8620a8c8c36397f733366e1b9d2f13b425be447d7bafa1ea6e03685356b",
+      "defaultMatchup": {
+        "p1": "human",
+        "p2": "model"
+      },
+      "neatMember": null,
+      "sims": 800,
+      "heuristicPly": 6,
+      "blurb": "AlphaZero-lite Connect 4 net (99% vs the built-in heuristic). Try to force a threat it can't parry.",
+      "source": {
+        "metric": "bvh",
+        "canonical": "saves/connect4-alphazero-ts100-steps100.sav",
+        "detail": "BvH champion==bvh row, 7x6/win-4, saves/connect4-alphazero-ts100-steps100-sweep.csv. ALPHAZERO (NEAT-genome AZ, already fixed-topology), NOT a CNN. rc500k (99.5% @ 48.7MB) excluded as within-noise and larger (\u00a73.4).",
+        "score": 99.0,
+        "evalConfig": "sims=6400",
+        "bundledCycles": 4670900
+      }
+    },
+    {
+      "id": "othello",
+      "label": "Othello",
+      "order": 3,
+      "gameType": 3,
+      "boardWidth": 8,
+      "boardHeight": 8,
+      "winLength": 0,
+      "model": "models/othello-c1-7x64-ctrl-seed11.sav.zst",
+      "bytes": 7922594,
+      "rawBytes": 24701365,
+      "sha256": "9095004d466fd6cbbee6060fe0fd25a9b6f298a19cc51d57c053b4e8527acafd",
+      "defaultMatchup": {
+        "p1": "human",
+        "p2": "model"
+      },
+      "neatMember": null,
+      "sims": 800,
+      "simsThreaded": 3200,
+      "heuristicPly": 10,
+      "blurb": "7x64 AlphaZero-lite, ship-certified ~OLIVAW-class Othello net (beats Edax L8, ~50% vs L10).",
+      "source": {
+        "metric": "edax",
+        "canonical": "saves/othello-c1-7x64-ctrl-seed11.sav",
+        "detail": "BvH saturated for Othello (net beats the ply-8 Strong heuristic) -> ranked on the Edax ladder saves/othello-edax-ladder.csv, ship-cert regime L9/L10 @ sims=12800, games=539, ship partition. Ship-certified champion (commit e31f11c: score vs Edax L10 = 0.568 PASS, +0.193 over incumbent). Do NOT bundle othello-az-cnn7x64-edaxopp-L6 (~207MB, weaker).",
+        "score": 56.8,
+        "evalConfig": "level=10,sims=12800,games=539,openings=ship",
+        "bundledCycles": 0
+      }
+    },
+    {
+      "id": "hex",
+      "label": "Hex",
+      "order": 4,
+      "gameType": 4,
+      "boardWidth": 11,
+      "boardHeight": 11,
+      "winLength": 0,
+      "model": "models/hex-alphazero-11x11-rc500k-ep100-cnn5x48.sav.zst",
+      "bytes": 11971521,
+      "rawBytes": 35731518,
+      "sha256": "f93c61301246cbc8a8b50438a3acae24ef25b7486446cd253188d1d0099b2ec4",
+      "defaultMatchup": {
+        "p1": "human",
+        "p2": "model"
+      },
+      "neatMember": null,
+      "sims": 400,
+      "simsThreaded": 1600,
+      "heuristicPly": 2,
+      "blurb": "cnn5x48 AlphaZero-lite on tournament-standard 11x11 Hex (99.5% vs the built-in heuristic).",
+      "source": {
+        "metric": "bvh",
+        "canonical": "saves/hex-alphazero-11x11-rc500k-ep100-cnn5x48.sav",
+        "detail": "BvH champion==bvh row, 11x11, saves/hex-alphazero-11x11-rc500k-ep100-cnn5x48-sweep.csv. ALPHAZERO_CNN. Ships REPLAY-BUFFER-STRIPPED: 280MB canonical -> ~36MB raw / ~11.4MB zst (\u00a73.1). Size-viable non-CNN 11x11 nets are unusable (1.5% BvH).",
+        "score": 99.5,
+        "evalConfig": "sims=3200",
+        "bundledCycles": 136000
+      }
+    },
+    {
+      "id": "gomoku",
+      "label": "Gomoku",
+      "order": 5,
+      "gameType": 5,
+      "boardWidth": 11,
+      "boardHeight": 11,
+      "winLength": 5,
+      "model": "models/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav.zst",
+      "bytes": 12297288,
+      "rawBytes": 36654300,
+      "sha256": "836f731120a1a58a03224b406ac0f6ea89913760b03271b87d7179170b2be6de",
+      "defaultMatchup": {
+        "p1": "human",
+        "p2": "model"
+      },
+      "neatMember": null,
+      "sims": 3200,
+      "simsThreaded": 3200,
+      "heuristicPly": 4,
+      "blurb": "cnn5x48 AlphaZero-lite on 11x11 freestyle Gomoku (win-5) \u2014 100% vs the built-in heuristic.",
+      "source": {
+        "metric": "bvh",
+        "canonical": "saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav",
+        "detail": "BvH champion==bvh row, 11x11/win-5, saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48-sweep.csv. ALPHAZERO_CNN. Ships REPLAY-BUFFER-STRIPPED: 269MB canonical -> ~37MB raw / ~11.7MB zst (\u00a73.1).",
+        "score": 100.0,
+        "evalConfig": "sims=3200",
+        "bundledCycles": 125000
+      }
+    }
+  ]
+}
