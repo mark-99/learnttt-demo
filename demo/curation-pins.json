@@ -18,7 +18,7 @@
   ],
   "pipeline": {
     "stripReplayBuffer": true,
-    "stripNote": "Truncate each source .sav at the byte offset of the 'replay_buffer' marker line (grep -aob) before compressing; no-op when the marker is absent (Othello C1 = 0% buffer; TTT NEAT). Loader builds the net from EMA>champion>learner, all of which precede the buffer.",
+    "stripNote": "Copy out only the sections the web loader reads: truncate at the 'replay_buffer' marker line AND excise the interior cnn_adam_state block (grep -aob for both; each part no-ops when its marker is absent). Loader builds the net from EMA>champion>learner, all of which precede the buffer, and its section loop never recognises cnn_adam_state — so the Adam moments are dead weight in every bundled save, not just the big ones.",
     "capRawMB": 50,
     "capZstMB": 15
   },
@@ -57,15 +57,16 @@
       "boardVariant": { "width": 8, "height": 8, "winLength": 0 },
       "metric": "edax",
       "csv": "saves/othello-edax-ladder.csv",
-      "pin": "saves/othello-c1-7x64-ctrl-seed11.sav",
-      "strategy": "ALPHAZERO_CNN 7x64 (C1 ctrl, offline-corpus-trained)",
-      "edaxScoreVsL10": 0.568,
+      "pin": "saves/othello-c15-seed11.sav",
+      "strategy": "ALPHAZERO_CNN 7x64 (C1-5 online, Gate C1-b DEPLOY)",
+      "edaxScoreVsL10": 0.625,
       "evalSims": 12800,
       "gatePly": null,
-      "strip": false,
-      "approxRawMB": 23.6,
-      "approxZstMB": 7.0,
-      "note": "BvH saturated for Othello (net beats ply-8 heuristic) -> ranked on the Edax ladder. Ship-certified champion (commit e31f11c: score vs Edax L10 = 0.568 PASS, +0.193 over incumbent). C1 nets carry NO replay buffer (0% -> strip is a no-op). DO NOT bundle othello-az-cnn7x64-edaxopp-L6 (~207MB, weaker)."
+      "strip": true,
+      "approxRawMB_full": 134.0,
+      "approxRawMB_stripped": 39.0,
+      "approxZstMB": 13.97,
+      "note": "BvH saturated for Othello (net beats ply-8 heuristic) -> ranked on the Edax ladder. Gate C1-b DEPLOY (docs/BRIEF-c1-5-online.md section 9): one-shot ship read on the reserved 1000-opening slice, pooled L9/L10 +0.0693 [+0.0534,+0.0850] score over the C1 champion it replaces; absolute L10 score 0.625. Unlike the C1 champion this net DOES carry a replay buffer and it needs strip=1 to fit: 134MB raw -> 39.0MB raw / 13.97MB zst, which clears the caps only because the strip drops cnn_adam_state as well as the buffer. Headroom is ~22% raw but only ~7% zst, so re-measure on any re-pin. DO NOT bundle othello-az-cnn7x64-edaxopp-L6 (~207MB, weaker)."
     },
     "hex": {
       "label": "Hex",
