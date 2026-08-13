@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 *.test.mjs
 demo/test/
+# The deploy-only delta applied to index.html/app.js; it is an input to the deploy, not an asset.
+demo/pages-deploy.patch
 wasm_gameplay.cpp
 wasm_load.cpp
 wasm_state.h
