@@ -18,7 +18,7 @@
   ],
   "pipeline": {
     "stripReplayBuffer": true,
-    "stripNote": "Copy out only the sections the web loader reads: truncate at the 'replay_buffer' marker line AND excise the interior cnn_adam_state block (grep -aob for both; each part no-ops when its marker is absent). Loader builds the net from EMA>champion>learner, all of which precede the buffer, and its section loop never recognises cnn_adam_state — so the Adam moments are dead weight in every bundled save, not just the big ones.",
+    "stripNote": "Copy out only the sections the web loader reads: truncate at the 'replay_buffer' marker line, excise the interior cnn_adam_state block, AND (since 2026-09-06) excise the interior cnn_champion_pool block whenever a complete cnn_ema_parameters block is present (grep -aob for the markers; each part no-ops when its marker is absent). Loader builds the net from EMA>champion>learner (wasm_load.cpp:289-294), all of which precede the buffer; its section loop never recognises cnn_adam_state, and with an EMA present it parses the pool but never uses it. The pool grows by one net per online retention stage (26MB after C1-5's six, 52MB after C5 Arm A's twelve), which is what pushed the Arm A re-pin over the raw cap. A save WITHOUT an EMA keeps its pool.",
     "capRawMB": 50,
     "capZstMB": 15
   },
@@ -57,16 +57,16 @@
       "boardVariant": { "width": 8, "height": 8, "winLength": 0 },
       "metric": "edax",
       "csv": "saves/othello-edax-ladder.csv",
-      "pin": "saves/othello-c15-seed11.sav",
-      "strategy": "ALPHAZERO_CNN 7x64 (C1-5 online, Gate C1-b DEPLOY)",
-      "edaxScoreVsL10": 0.625,
+      "pin": "saves/othello-c15gen2-seed11.sav",
+      "strategy": "ALPHAZERO_CNN 7x64 (C5 Arm A: the certified champion + a 2nd online generation; deployed by policy override 2026-09-06)",
+      "edaxScoreVsL10": 0.68,
       "evalSims": 12800,
       "gatePly": null,
       "strip": true,
-      "approxRawMB_full": 134.0,
-      "approxRawMB_stripped": 39.0,
-      "approxZstMB": 13.97,
-      "note": "BvH saturated for Othello (net beats ply-8 heuristic) -> ranked on the Edax ladder. Gate C1-b DEPLOY (docs/BRIEF-c1-5-online.md section 9): one-shot ship read on the reserved 1000-opening slice, pooled L9/L10 +0.0693 [+0.0534,+0.0850] score over the C1 champion it replaces; absolute L10 score 0.625. Unlike the C1 champion this net DOES carry a replay buffer and it needs strip=1 to fit: 134MB raw -> 39.0MB raw / 13.97MB zst, which clears the caps only because the strip drops cnn_adam_state as well as the buffer. Headroom is ~22% raw but only ~7% zst, so re-measure on any re-pin. DO NOT bundle othello-az-cnn7x64-edaxopp-L6 (~207MB, weaker)."
+      "approxRawMB_full": 160.2,
+      "approxRawMB_stripped": 12.95,
+      "approxZstMB": 4.78,
+      "note": "BvH saturated for Othello (net beats ply-8 heuristic) -> ranked on the Edax ladder. DEPLOYED BY POLICY OVERRIDE, NOT CERTIFIED (docs/HANDOFF-othello-program.md section 6; analysis in docs/BRAINSTORM-othello-next-avenues.md section 8). Its C5 ship read (docs/BRIEF-c5-gen2-capacity.md section 10) was INCONCLUSIVE: +0.037 [+0.0216, +0.0527] pooled L9/L10 score at s12800 over the certified champion othello-c15-seed11 (CI excludes zero; lower bound below the S=0.025 bar); dev +0.047 [+0.034, +0.059] IMPROVES. edaxScoreVsL10 = 0.680 is a DESCRIPTIVE read (256/32/112, n=400, the spent dev-select-topup slice, eval seed 5, cpuct 2.5; the champion scored 0.6425 on the same cells in C4) and NOT a ship number. 160MB raw; post-strip 12.95MB raw / 4.78MB zst (measured 2026-09-06) — it fits ONLY because the strip now excises its 52MB champion pool (twelve retention stages' worth) alongside cnn_adam_state and the buffer; without the pool strip it was 64.9MB raw, over the cap. The certified champion othello-c15-seed11.sav remains the fallback pin. DO NOT bundle othello-az-cnn7x64-edaxopp-L6 (~207MB, weaker)."
     },
     "hex": {
       "label": "Hex",
@@ -80,9 +80,9 @@
       "gatePly": null,
       "strip": true,
       "approxRawMB_full": 280.1,
-      "approxRawMB_stripped": 35.8,
-      "approxZstMB": 11.42,
-      "note": "Tournament-standard 11x11. Only board with a strong (99.5% BvH) net that is size-viable AFTER stripping (280MB->36MB raw / 11.4MB zst, decimal). Size-viable non-cnn 11x11 nets are unusable (1.5% BvH). 9x9 cnn is stronger-board but the nets are 180-370MB (bigger even stripped). REQUIRES the strip pipeline step."
+      "approxRawMB_stripped": 5.29,
+      "approxZstMB": 1.93,
+      "note": "Tournament-standard 11x11. Only board with a strong (99.5% BvH) net that is size-viable AFTER stripping (280MB->36MB raw / 11.4MB zst with the buffer+Adam strip; ->5.3MB raw / 1.9MB zst since the champion-pool strip of 2026-09-06, same played net: the EMA). Size-viable non-cnn 11x11 nets are unusable (1.5% BvH). 9x9 cnn is stronger-board but the nets are 180-370MB (bigger even stripped). REQUIRES the strip pipeline step."
     },
     "gomoku": {
       "label": "Gomoku",
@@ -96,9 +96,9 @@
       "gatePly": null,
       "strip": true,
       "approxRawMB_full": 268.8,
-      "approxRawMB_stripped": 36.7,
-      "approxZstMB": 11.73,
-      "note": "11x11 win-5 (freestyle). 100% BvH cnn5x48 stripped 269MB->37MB raw / 11.7MB zst (decimal). Alt with equal BvH: -cnn5x48-ply4cont (same size; both saturate BvH at 100% so BvH can't separate them — base run chosen as canonical). 13x13 has only a 233MB cnn8x96 PBT champion at 97.4% (s100/ply3, different regime); 15x15 has no viable net. REQUIRES the strip pipeline step."
+      "approxRawMB_stripped": 5.45,
+      "approxZstMB": 1.92,
+      "note": "11x11 win-5 (freestyle). 100% BvH cnn5x48 stripped 269MB->37MB raw / 11.7MB zst with the buffer+Adam strip; ->5.5MB raw / 1.9MB zst since the champion-pool strip of 2026-09-06 (same played net: the EMA). Alt with equal BvH: -cnn5x48-ply4cont (same size; both saturate BvH at 100% so BvH can't separate them — base run chosen as canonical). 13x13 has only a 233MB cnn8x96 PBT champion at 97.4% (s100/ply3, different regime); 15x15 has no viable net. REQUIRES the strip pipeline step."
     }
   }
 }

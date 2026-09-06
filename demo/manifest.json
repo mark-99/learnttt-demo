@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-08-13T14:37:52Z",
+  "generated": "2026-09-06T22:40:29Z",
   "wasm": "../learnttt.wasm",
   "_comment": "Web-play demo manifest (docs/PLAN-webui-demo-fbf243.md \u00a75). COPY (labels, order, matchups, sims, blurbs, source detail) is hand-authored and reviewed in git; the identity guards (gameType/boardWidth/boardHeight/winLength) plus bytes/rawBytes/sha256/model/source.canonical are STAMPED by scripts/build-demo-bundle.sh from web/demo/curation-pins.json + the built models. Re-running the build never clobbers copy.",
   "games": [
@@ -70,10 +70,10 @@
       "boardWidth": 8,
       "boardHeight": 8,
       "winLength": 0,
-      "model": "models/othello-c15-seed11.sav.zst",
-      "bytes": 13970319,
-      "rawBytes": 38975327,
-      "sha256": "fee1aa7729dfd814be9b1b458568142824fd164d6f8f0261ecab72708e3285d2",
+      "model": "models/othello-c15gen2-seed11.sav.zst",
+      "bytes": 4775192,
+      "rawBytes": 12952970,
+      "sha256": "3bd35a588848b7bd3b80c671c12dee870bae116af93961f31b3ef3ef56757a82",
       "defaultMatchup": {
         "p1": "human",
         "p2": "model"
@@ -82,14 +82,14 @@
       "sims": 800,
       "simsThreaded": 3200,
       "heuristicPly": 10,
-      "blurb": "7x64 AlphaZero-lite, ship-certified ~OLIVAW-class Othello net (beats Edax L8; 0.625 score vs L10).",
+      "blurb": "7x64 AlphaZero-lite Othello net: the ship-certified champion plus a second online generation (0.68 score vs Edax L10 at 12,800 sims; deployed by judgment on an inconclusive certification).",
       "source": {
         "metric": "edax",
-        "canonical": "saves/othello-c15-seed11.sav",
-        "detail": "BvH saturated for Othello (net beats the ply-8 Strong heuristic) -> ranked on the Edax ladder. Gate C1-b DEPLOY (docs/BRIEF-c1-5-online.md section 9.3): one-shot ship read on the reserved 1000-opening ship-confirm slice, L9/L10 @ sims=12800, opening-clustered paired bootstrap against the C1 champion it replaces -> pooled +0.0693 score [+0.0534, +0.0850] at 95%, neither level a loss. Absolute L10 score 0.625. Do NOT bundle othello-az-cnn7x64-edaxopp-L6 (~207MB, weaker).",
-        "score": 62.5,
-        "evalConfig": "level=9|10,sims=12800,openings=ship-confirm(1000 x 2 sides)",
-        "bundledCycles": 150000
+        "canonical": "saves/othello-c15gen2-seed11.sav",
+        "detail": "BvH saturated for Othello (net beats the ply-8 Strong heuristic) -> ranked on the Edax ladder. C5 Arm A (docs/BRIEF-c5-gen2-capacity.md), DEPLOYED BY POLICY OVERRIDE 2026-09-06 (docs/HANDOFF-othello-program.md section 6): NOT certified. Its one-shot ship read on the held-out 800-opening C5 slice, L9/L10 @ sims=12800, opening-clustered paired bootstrap against the certified champion othello-c15-seed11 -> pooled +0.037 score [+0.0216, +0.0527] at 95%: INCONCLUSIVE (CI excludes zero, lower bound below the S=0.025 bar); dev L6-L8 +0.047 [+0.034, +0.059] IMPROVES. The 0.68 shown is a DESCRIPTIVE L10 read (256/32/112, n=400, spent dev-select-topup slice, eval seed 5, cpuct 2.5; the champion scored 0.6425 on the same cells in C4). Do NOT bundle othello-az-cnn7x64-edaxopp-L6 (~207MB, weaker).",
+        "score": 68.0,
+        "evalConfig": "level=10,sims=12800,openings=dev-select-topup(200 x 2 sides),seed=5; descriptive, not a ship read",
+        "bundledCycles": 300000
       }
     },
     {
@@ -101,9 +101,9 @@
       "boardHeight": 11,
       "winLength": 0,
       "model": "models/hex-alphazero-11x11-rc500k-ep100-cnn5x48.sav.zst",
-      "bytes": 10557896,
-      "rawBytes": 29165374,
-      "sha256": "00571f00591d2e128e6439410b40ac08d7b7a239ae3d83d8d962196bf4d96731",
+      "bytes": 1926817,
+      "rawBytes": 5286920,
+      "sha256": "75aeb5562f6cbccf4c9551d4488ccd96ca004605a0bb89a79b0d18ed27c5a472",
       "defaultMatchup": {
         "p1": "human",
         "p2": "model"
@@ -131,9 +131,9 @@
       "boardHeight": 11,
       "winLength": 5,
       "model": "models/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav.zst",
-      "bytes": 10528186,
-      "rawBytes": 30111321,
-      "sha256": "41c4cc6813c0dba1036cf7d104e05b505cf2cd489fc8a0acac9df95ef2055496",
+      "bytes": 1919338,
+      "rawBytes": 5448510,
+      "sha256": "ea5181fd54c8a035abc90b6362ed2b2e6aac301a9c94983a05bd32ddb2b55b43",
       "defaultMatchup": {
         "p1": "human",
         "p2": "model"
