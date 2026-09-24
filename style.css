@@ -474,12 +474,12 @@ h1 {
 }
 
 /* Rolling status history: reserve space for kStatusHistoryLen rows so height is stable, newest at
-   the bottom hugging the current line. */
+   the bottom hugging the current line. app.js sets --status-history-rows from kStatusHistoryLen. */
 .status-history {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: calc(3 * 1.15em);
+  min-height: calc(var(--status-history-rows, 4) * 1.15em);
 }
 
 .status-hist {

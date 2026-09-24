@@ -146,7 +146,10 @@ let moveGeneration = 0;
 let thinkingStart = 0;
 // Rolling history of recent status messages (newest last). Shown above the current status line so a
 // fast player's move doesn't instantly scroll the previous message away (persistent, not timer-wiped).
-const kStatusHistoryLen = 3;
+// Four rows keep the last "moved (t)" line of both sides visible while the next side thinks.
+const kStatusHistoryLen = 4;
+// style.css sizes .status-history from this property, so the reserved height follows the cap.
+statusHistoryEl?.style.setProperty("--status-history-rows", String(kStatusHistoryLen));
 let statusHistory = [];
 
 // Auto-play state
