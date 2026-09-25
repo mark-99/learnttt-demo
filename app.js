@@ -260,10 +260,9 @@ const C4_HEURISTIC_PLY_OPTIONS = [6, 8, 10, 11, 12, 13];
 // established convention here is to expose the full range unguarded.
 // Curated NEGAMAX-lookahead tiers for the Othello heuristic opponent (single-threaded alpha-beta —
 // the 8-worker pool is MCTS-only, it does NOT speed this up). In real play (temp=0, one pruned search)
-// these are fast: ply 10 is <1s, ply 12 is the ~2-3s "thinking" tier. All even (parity effect: even
-// depths play better). ply 14+ omitted — it can spike; add it if 12 still feels too fast.
-// getHeuristicPlyOptions() auto-includes the loaded net's own default ply (play_lookahead, e.g. 4).
-const OTHELLO_HEURISTIC_PLY_OPTIONS = [6, 8, 10, 12];
+// these are fast: ply 10 is <1s. Ply 10 is the default (defaultHeuristicPly and the demo manifest's
+// heuristicPly). getHeuristicPlyOptions() also adds a NEAT save's own play_lookahead when it is not listed.
+const OTHELLO_HEURISTIC_PLY_OPTIONS = [9, 10, 11];
 const HEX_HEURISTIC_PLY_OPTIONS = [1, 2, 3];
 
 function buildGameConfig() {
@@ -295,7 +294,7 @@ function buildGameConfig() {
       name: "Othello",
       simsOptions: OTHELLO_SIMS_OPTIONS,
       defaultSims: 6400,  // interactive default ~2.4s at 8 workers (25600 ~9s was too slow; slider retains max)
-      defaultHeuristicPly: 4,
+      defaultHeuristicPly: 10,
       heuristicPlyOptions: OTHELLO_HEURISTIC_PLY_OPTIONS,
       cssClass: "oth",
       sideLabels: { 1: "Black (First)", 2: "White (Second)" },
