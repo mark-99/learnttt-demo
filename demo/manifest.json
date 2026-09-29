@@ -80,7 +80,7 @@
       },
       "neatMember": null,
       "sims": 800,
-      "simsThreaded": 6400,
+      "simsThreaded": 12800,
       "heuristicPly": 10,
       "blurb": "7x64 AlphaZero-lite Othello net: the ship-certified champion plus a second online generation (0.68 score vs Edax L10 at 12,800 sims; deployed by judgment on an inconclusive certification).",
       "source": {
