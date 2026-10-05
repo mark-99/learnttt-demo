@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-09-06T22:40:29Z",
+  "generated": "2026-10-05T07:53:48Z",
   "wasm": "../learnttt.wasm",
   "_comment": "Web-play demo manifest (docs/PLAN-webui-demo-fbf243.md \u00a75). COPY (labels, order, matchups, sims, blurbs, source detail) is hand-authored and reviewed in git; the identity guards (gameType/boardWidth/boardHeight/winLength) plus bytes/rawBytes/sha256/model/source.canonical are STAMPED by scripts/build-demo-bundle.sh from web/demo/curation-pins.json + the built models. Re-running the build never clobbers copy.",
   "games": [
@@ -41,10 +41,10 @@
       "boardWidth": 7,
       "boardHeight": 6,
       "winLength": 4,
-      "model": "models/connect4-alphazero-ts100-steps100.sav.zst",
-      "bytes": 895559,
-      "rawBytes": 4289807,
-      "sha256": "d825e8620a8c8c36397f733366e1b9d2f13b425be447d7bafa1ea6e03685356b",
+      "model": "models/c4cnn2-6x64-seed11-g275000.sav.zst",
+      "bytes": 3968605,
+      "rawBytes": 10768214,
+      "sha256": "270e88d3f46fea7a4d9aafe94a29a45ad45452e0e8771f0df9230fa5844c9f29",
       "defaultMatchup": {
         "p1": "human",
         "p2": "model"
@@ -52,14 +52,13 @@
       "neatMember": null,
       "sims": 800,
       "heuristicPly": 6,
-      "blurb": "AlphaZero-lite Connect 4 net (99% vs the built-in heuristic). Try to force a threat it can't parry.",
+      "blurb": "AlphaZero-lite Connect 4 CNN, trained by self-play only. Moving first, it kept the forced win against a perfect solver in 50 of 50 games.",
       "source": {
-        "metric": "bvh",
-        "canonical": "saves/connect4-alphazero-ts100-steps100.sav",
-        "detail": "BvH champion==bvh row, 7x6/win-4, saves/connect4-alphazero-ts100-steps100-sweep.csv. ALPHAZERO (NEAT-genome AZ, already fixed-topology), NOT a CNN. rc500k (99.5% @ 48.7MB) excluded as within-noise and larger (\u00a73.4).",
-        "score": 99.0,
-        "evalConfig": "sims=6400",
-        "bundledCycles": 4670900
+        "metric": "pinned",
+        "canonical": "saves/c4cnn2-6x64-seed11-g275000.sav",
+        "detail": "Operator pin 2026-10-05 (docs/BRIEF-connect4-cnn-selfplay-2.md section 8): 6x64 CNN, seed 11 at 275,000 self-play games. Graded against the Pons solver at 800 sims: net first 50 W / 0 D / 0 L (the previous NEAT-genome net: 0 / 0 / 50), random-position error rate 9.24% on the dev set.",
+        "evalConfig": "sims=800",
+        "bundledCycles": 275000
       }
     },
     {

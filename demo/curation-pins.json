@@ -40,17 +40,14 @@
     "connect4": {
       "label": "Connect 4",
       "boardVariant": { "width": 7, "height": 6, "winLength": 4 },
-      "metric": "bvh",
-      "csv": "saves/connect4-alphazero-ts100-steps100-sweep.csv",
-      "pin": "saves/connect4-alphazero-ts100-steps100.sav",
-      "strategy": "alphazero (NEAT-genome, h=192)",
-      "bvhPct": 99.0,
-      "evalSims": 6400,
+      "metric": "solver (operator pin; docs/BRIEF-connect4-cnn-selfplay-2.md section 8)",
+      "csv": null,
+      "pin": "saves/c4cnn2-6x64-seed11-g275000.sav",
+      "strategy": "ALPHAZERO_CNN 6x64 (plain self-play, cosine LR schedule, leaky value head)",
+      "evalSims": 800,
       "gatePly": null,
       "strip": true,
-      "approxRawMB": 13.0,
-      "approxZstMB": 1.06,
-      "note": "Single 7x6/w4 board (heuristic era stable for C4). 99.0% BvH at 13MB raw -> ~1MB zst, no strip strictly needed but strip is a harmless no-cost shrink. Ties at 99.0%: connect4-alphazero-tsim400-sims400 (equal). The 100% cnn4x32-policy net exists but is 115MB and needs stripping for no BvH gain over 99.0% -> not chosen. Excluded stronger-but-larger: connect4-alphazero-rc500k-* (99.5% @ 48.7MB)."
+      "note": "Deployed by operator decision 2026-10-05, outside the pre-registered rule of docs/BRIEF-connect4-cnn-selfplay-2.md (section 8). With the net first it kept the forced win against the Pons solver in 50 of 50 games at 800 sims (dev grade, tmp/c4cnn2-grades.tsv); the replaced NEAT-genome net saves/connect4-alphazero-ts100-steps100.sav kept it in 0 of 50. Random-position error rate (metric A) 9.24% on the dev set. Raw pin decompressed from saves/c4cnn2-6x64-seed11-g275000.sav.zst."
     },
     "othello": {
       "label": "Othello",
