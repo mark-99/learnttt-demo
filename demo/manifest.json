@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-10-05T07:53:48Z",
+  "generated": "2026-10-05T19:15:41Z",
   "wasm": "../learnttt.wasm",
   "_comment": "Web-play demo manifest (docs/PLAN-webui-demo-fbf243.md \u00a75). COPY (labels, order, matchups, sims, blurbs, source detail) is hand-authored and reviewed in git; the identity guards (gameType/boardWidth/boardHeight/winLength) plus bytes/rawBytes/sha256/model/source.canonical are STAMPED by scripts/build-demo-bundle.sh from web/demo/curation-pins.json + the built models. Re-running the build never clobbers copy.",
   "games": [
@@ -41,10 +41,10 @@
       "boardWidth": 7,
       "boardHeight": 6,
       "winLength": 4,
-      "model": "models/c4cnn2-6x64-seed11-g275000.sav.zst",
-      "bytes": 3968605,
-      "rawBytes": 10768214,
-      "sha256": "270e88d3f46fea7a4d9aafe94a29a45ad45452e0e8771f0df9230fa5844c9f29",
+      "model": "models/c4cnn2-6x64-seed12-g275000.sav.zst",
+      "bytes": 4007260,
+      "rawBytes": 10761585,
+      "sha256": "028dac0555e21ce88c1742158ae0fe5bb67a84f7afb5f168070245cfb090b58e",
       "defaultMatchup": {
         "p1": "human",
         "p2": "model"
@@ -52,11 +52,11 @@
       "neatMember": null,
       "sims": 800,
       "heuristicPly": 6,
-      "blurb": "AlphaZero-lite Connect 4 CNN, trained by self-play only. Moving first, it kept the forced win against a perfect solver in 50 of 50 games.",
+      "blurb": "AlphaZero-lite Connect 4 CNN, trained by self-play only. Against a perfect solver that plays a random move one time in ten, it scores 97% moving first and 63% moving second.",
       "source": {
         "metric": "pinned",
-        "canonical": "saves/c4cnn2-6x64-seed11-g275000.sav",
-        "detail": "Operator pin 2026-10-05 (docs/BRIEF-connect4-cnn-selfplay-2.md section 8): 6x64 CNN, seed 11 at 275,000 self-play games. Graded against the Pons solver at 800 sims: net first 50 W / 0 D / 0 L (the previous NEAT-genome net: 0 / 0 / 50), random-position error rate 9.24% on the dev set.",
+        "canonical": "saves/c4cnn2-6x64-seed12-g275000.sav",
+        "detail": "Pre-registered pick 2026-10-05 (docs/BRIEF-connect4-noisy-solver.md sections 5.2 and 6.1): 6x64 CNN, seed 12 at 275,000 self-play games. Against the Pons solver with 10% random moves at 800 sims (seeds 2001-2700, both colours): score 0.973 first, 0.633 second, +0.051 [+0.031, +0.071] over the previous pin seed11-g275000. Net first against the perfect solver: 41 W / 6 D / 3 L.",
         "evalConfig": "sims=800",
         "bundledCycles": 275000
       }

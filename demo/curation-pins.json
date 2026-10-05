@@ -40,14 +40,14 @@
     "connect4": {
       "label": "Connect 4",
       "boardVariant": { "width": 7, "height": 6, "winLength": 4 },
-      "metric": "solver (operator pin; docs/BRIEF-connect4-cnn-selfplay-2.md section 8)",
+      "metric": "noisy solver (docs/BRIEF-connect4-noisy-solver.md section 5)",
       "csv": null,
-      "pin": "saves/c4cnn2-6x64-seed11-g275000.sav",
+      "pin": "saves/c4cnn2-6x64-seed12-g275000.sav",
       "strategy": "ALPHAZERO_CNN 6x64 (plain self-play, cosine LR schedule, leaky value head)",
       "evalSims": 800,
       "gatePly": null,
       "strip": true,
-      "note": "Deployed by operator decision 2026-10-05, outside the pre-registered rule of docs/BRIEF-connect4-cnn-selfplay-2.md (section 8). With the net first it kept the forced win against the Pons solver in 50 of 50 games at 800 sims (dev grade, tmp/c4cnn2-grades.tsv); the replaced NEAT-genome net saves/connect4-alphazero-ts100-steps100.sav kept it in 0 of 50. Random-position error rate (metric A) 9.24% on the dev set. Raw pin decompressed from saves/c4cnn2-6x64-seed11-g275000.sav.zst."
+      "note": "Replaced the operator pin seed11-g275000 by the pre-registered rule of docs/BRIEF-connect4-noisy-solver.md section 5 (2026-10-05): selected from all 24 rerun checkpoints on the noisy-solver measure (Pons solver playing a random legal move with probability 0.10), then confirmed on seeds 2001-2700 at 800 sims, paired score minus the old pin +0.051 [+0.031, +0.071] (net first 0.973, net second 0.633). Section 6.1: 6,400 sims on 8 cores did not beat 800 (+0.010 [-0.006, +0.027]), so no simsThreaded. Metric B (net first against the perfect solver) 41 W / 6 D / 3 L. Raw pin decompressed from saves/c4cnn2-6x64-seed12-g275000.sav.zst."
     },
     "othello": {
       "label": "Othello",
