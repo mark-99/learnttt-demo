@@ -144,6 +144,13 @@ let moveGeneration = 0;
 
 // Thinking indicator state
 let thinkingStart = 0;
+// Elapsed-time display on the busy status ("Model thinking... 7 s"). It appears once a move has taken
+// kThinkingTimerDelayMs, so fast moves never show it, and refreshes every kThinkingTimerTickMs. A search
+// on the main thread (the single-thread engine, or any heuristic move) blocks the timer, so there the
+// status keeps its plain "thinking..." text until the move lands.
+const kThinkingTimerDelayMs = 1000;
+const kThinkingTimerTickMs = 250;
+let thinkingTimerId = 0;
 // Rolling history of recent status messages (newest last). Shown above the current status line so a
 // fast player's move doesn't instantly scroll the previous message away (persistent, not timer-wiped).
 // Four rows keep the last "moved (t)" line of both sides visible while the next side thinks.
@@ -610,13 +617,28 @@ function setModelInfo(msg) { modelInfo.textContent = msg; }
 function setGraphStats(msg) { if (graphStats) graphStats.textContent = msg || ""; }
 function showThinking(player) {
   pushStatusHistory(statusLine.textContent);  // move the outgoing state (e.g. "Black's turn") into the trail
-  setStatusBusy(`${playerName(player)} thinking...`);
+  const label = `${playerName(player)} thinking...`;
+  setStatusBusy(label);
   thinkingStart = performance.now();
+  stopThinkingTimer();
+  thinkingTimerId = setInterval(() => {
+    // Only rewrite the line while it still shows THIS move's busy label: anything that replaced it (an
+    // error, a load, a game-over message) wins, and the timer never writes over it.
+    if (!statusLine.classList.contains('status-busy') || !statusLine.textContent.startsWith(label)) return;
+    const elapsed = performance.now() - thinkingStart;
+    if (elapsed >= kThinkingTimerDelayMs) setStatus(`${label} ${Math.floor(elapsed / 1000)} s`);
+  }, kThinkingTimerTickMs);
+}
+
+function stopThinkingTimer() {
+  if (thinkingTimerId) clearInterval(thinkingTimerId);
+  thinkingTimerId = 0;
 }
 
 function finishThinking(player) {
   const elapsed = thinkingStart > 0 ? performance.now() - thinkingStart : 0;
   thinkingStart = 0;
+  stopThinkingTimer();
   clearStatusBusy();
   if (gameOver || errorLine.textContent) return;
   const timeStr = elapsed >= 1000 ? `${(elapsed / 1000).toFixed(1)}s` : `${Math.round(elapsed)}ms`;
@@ -631,6 +653,7 @@ function finishThinking(player) {
 
 function resetThinking() {
   clearStatusBusy();
+  stopThinkingTimer();
   thinkingStart = 0;
   // History persists across moves (that's the point) — it's only cleared on a new game (resetBoard).
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-10-05T19:15:41Z",
+  "generated": "2026-10-06T14:55:15Z",
   "wasm": "../learnttt.wasm",
   "_comment": "Web-play demo manifest (docs/PLAN-webui-demo-fbf243.md \u00a75). COPY (labels, order, matchups, sims, blurbs, source detail) is hand-authored and reviewed in git; the identity guards (gameType/boardWidth/boardHeight/winLength) plus bytes/rawBytes/sha256/model/source.canonical are STAMPED by scripts/build-demo-bundle.sh from web/demo/curation-pins.json + the built models. Re-running the build never clobbers copy.",
   "games": [
@@ -126,13 +126,13 @@
       "label": "Gomoku",
       "order": 5,
       "gameType": 5,
-      "boardWidth": 11,
-      "boardHeight": 11,
+      "boardWidth": 13,
+      "boardHeight": 13,
       "winLength": 5,
-      "model": "models/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav.zst",
-      "bytes": 1919338,
-      "rawBytes": 5448510,
-      "sha256": "ea5181fd54c8a035abc90b6362ed2b2e6aac301a9c94983a05bd32ddb2b55b43",
+      "model": "models/gomoku-13x13-cnn8x96-pbt-champion-ema.sav.zst",
+      "bytes": 12145233,
+      "rawBytes": 33145674,
+      "sha256": "5fea6f683777f0c59fe3a8b6a58a0f0987e745ee409eb1a0c5e0ba0bd4189b96",
       "defaultMatchup": {
         "p1": "human",
         "p2": "model"
@@ -140,15 +140,15 @@
       "neatMember": null,
       "sims": 3200,
       "simsThreaded": 3200,
-      "heuristicPly": 4,
-      "blurb": "cnn5x48 AlphaZero-lite on 11x11 freestyle Gomoku (win-5) \u2014 100% vs the built-in heuristic.",
+      "heuristicPly": 3,
+      "blurb": "AlphaZero-lite 8x96 CNN on 13x13 freestyle Gomoku (five in a row), trained by population self-play. Against the TSS heuristic playing its best move it wins 96% of games, and against the Rapfi engine held to 64 nodes a move it scores 48%.",
+      "notice": "This 13x13 net searches 3,200 positions a move. That takes a few seconds on a desktop and longer on laptops and phones, or half a minute or more where the browser runs the search on one thread.",
       "source": {
-        "metric": "bvh",
-        "canonical": "saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav",
-        "detail": "BvH champion==bvh row, 11x11/win-5, saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48-sweep.csv. ALPHAZERO_CNN. Ships REPLAY-BUFFER-STRIPPED: 269MB canonical -> ~37MB raw / ~11.7MB zst (\u00a73.1).",
-        "score": 100.0,
-        "evalConfig": "sims=3200",
-        "bundledCycles": 125000
+        "metric": "pinned",
+        "canonical": "saves/gomoku-13x13-cnn8x96-pbt-champion-ema.sav",
+        "detail": "Operator pin 2026-10-06 (docs/BRIEF-gomoku-rapfi-read.md section 10.3), outside the read's section 5 rule: its condition 4 (a 3,200-sim move under 2 s on 8 workers) failed at about 4.3 s, and the operator chose to keep 3,200 sims and let move time vary by device. PBT champion of the 13x13 cnn8x96 run (slot 7 at 167,300 cycles), EMA weights, cpuct 2.5, exported from the champion sidecar; the save's 'cycles 31400' header comes from the template save, so bundledCycles is pinned. Read at 3,200 sims over 200 openings, both colours (section 10): against argmax TSS 0.963 [0.943, 0.980] at ply 3 and 0.960 [0.940, 0.978] at ply 4; against Rapfi 0.761 at 16 nodes a move, 0.482 at 64 and 0.310 at 256. The previous pin saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav stays in saves/.",
+        "evalConfig": "sims=3200,openings=read-13x13 (200 x 2 colours),seed=1",
+        "bundledCycles": 167300
       }
     }
   ]

@@ -83,19 +83,19 @@
     },
     "gomoku": {
       "label": "Gomoku",
-      "boardVariant": { "width": 11, "height": 11, "winLength": 5 },
-      "metric": "bvh",
-      "csv": "saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48-sweep.csv",
-      "pin": "saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav",
-      "strategy": "ALPHAZERO_CNN cnn5x48",
-      "bvhPct": 100.0,
+      "boardVariant": { "width": 13, "height": 13, "winLength": 5 },
+      "metric": "pinned (operator decision, docs/BRIEF-gomoku-rapfi-read.md section 10.3)",
+      "csv": null,
+      "pin": "saves/gomoku-13x13-cnn8x96-pbt-champion-ema.sav",
+      "strategy": "ALPHAZERO_CNN cnn8x96 (PBT champion, EMA weights, cpuct 2.5)",
       "evalSims": 3200,
       "gatePly": null,
       "strip": true,
-      "approxRawMB_full": 268.8,
-      "approxRawMB_stripped": 5.45,
-      "approxZstMB": 1.92,
-      "note": "11x11 win-5 (freestyle). 100% BvH cnn5x48 stripped 269MB->37MB raw / 11.7MB zst with the buffer+Adam strip; ->5.5MB raw / 1.9MB zst since the champion-pool strip of 2026-09-06 (same played net: the EMA). Alt with equal BvH: -cnn5x48-ply4cont (same size; both saturate BvH at 100% so BvH can't separate them — base run chosen as canonical). 13x13 has only a 233MB cnn8x96 PBT champion at 97.4% (s100/ply3, different regime); 15x15 has no viable net. REQUIRES the strip pipeline step."
+      "bundledCycles": 167300,
+      "approxRawMB_full": 70.9,
+      "approxRawMB_stripped": 33.1,
+      "approxZstMB": 12.1,
+      "note": "13x13 win-5 (freestyle) cnn8x96 PBT champion (slot 7 at 167,300 cycles), EMA weights, cpuct 2.5, exported from the champion sidecar (docs/PLAN-gomoku-rapfi-yardstick.md section 3.6). Pinned 2026-10-06 by operator decision, outside the pre-registered rule of docs/BRIEF-gomoku-rapfi-read.md section 5: conditions 1 to 3 passed, condition 4 (a 3,200-sim move under 2 s on 8 workers) failed at about 4.3 s, and the operator kept 3,200 sims and let move time vary by device (section 10.3). Read at 3,200 sims over 200 openings, both colours: argmax TSS 0.963 [0.943, 0.980] at ply 3 and 0.960 [0.940, 0.978] at ply 4; Rapfi 0.761 at 16 nodes, 0.482 at 64, 0.310 at 256. bundledCycles is pinned because the save's 'cycles 31400' header comes from the template save the export took its configs from. No replay buffer; the strip drops cnn_adam_state and an empty champion pool (70.9MB -> 33.1MB raw / 12.1MB zst). heuristicPly is 3: in the single-thread wasm on this box, idle, the browser heuristic took a median 1.6 s a move at ply 3 (max 2.0 s) and 19.5 s at ply 4 (max 32 s), on the main thread, against about 4.3 s for the net's own 8-worker move. Replaced the 11x11 cnn5x48 pin saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav (100% BvH), which stays in saves/."
     }
   }
 }

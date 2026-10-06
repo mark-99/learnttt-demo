@@ -51,6 +51,7 @@ window.__demoState = state;
 
 let tabsEl = null;
 let blurbEl = null;
+let noticeEl = null;
 let games = [];
 let api = null;
 
@@ -106,6 +107,13 @@ function buildTabStrip() {
   blurbEl.setAttribute("role", "status");
   blurbEl.setAttribute("aria-live", "polite");
   header.appendChild(blurbEl);
+
+  // One line of per-game copy from the manifest's optional `notice` (for example a slow-device warning).
+  // It follows the highlighted tab (markActiveTab), so it stays hidden for games without one.
+  noticeEl = document.createElement("p");
+  noticeEl.className = "demo-notice";
+  noticeEl.hidden = true;
+  header.appendChild(noticeEl);
 }
 
 // Wrap the dev-only file pickers (Save file, Show-checkpoints, Sweep CSV — the whole .controls-files
@@ -349,12 +357,23 @@ function subscribeToLoads() {
 // ---- Small DOM/state helpers ---------------------------------------------------------------------
 
 function markActiveTab(gameId) {
+  setNotice(gameId);
   if (!tabsEl) return;
   for (const btn of tabsEl.querySelectorAll(".demo-tab")) {
     const on = btn.dataset.gameId === gameId;
     btn.classList.toggle("active", on);
     btn.setAttribute("aria-current", on ? "page" : "false");
   }
+}
+
+// Show the highlighted game's manifest `notice`, or hide the line when the game has none (or no tab is
+// highlighted). Called from markActiveTab, so the notice can never describe a game other than the tab's.
+function setNotice(gameId) {
+  if (!noticeEl) return;
+  const g = gameId ? games.find((x) => x.id === gameId) : null;
+  const text = (g && g.notice) || "";
+  noticeEl.textContent = text;
+  noticeEl.hidden = text === "";
 }
 
 // Re-derive which tab reflects the net the ENGINE actually holds right now, via the getModelMeta seam,

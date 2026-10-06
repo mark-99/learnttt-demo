@@ -115,6 +115,11 @@ export function validateManifest(manifest) {
       errs.push(`${where}: \`neatMember\` must be null for a non-NEAT game (${g.id})`);
     }
     if (g.blurb != null && typeof g.blurb !== "string") errs.push(`${where}: \`blurb\`, when present, must be a string`);
+    // notice: optional one-line copy the controller shows under the blurb for this game only (for example a
+    // slow-device warning). Empty is rejected, because it would render a blank line (mirrors --check).
+    if (g.notice != null && !(typeof g.notice === "string" && g.notice.trim() !== "")) {
+      errs.push(`${where}: \`notice\`, when present, must be a non-empty string`);
+    }
   });
 
   if (errs.length) throw new Error("invalid demo manifest: " + errs.join("; "));
