@@ -130,7 +130,8 @@ let sweepData = null;
 let othelloLegalMoves = new Map();
 let othelloIllegalMoveFallbacks = 0;
 
-// Per-player configuration
+// Per-player configuration. The ply is a placeholder that model load replaces with
+// getDefaultHeuristicPly(), which is each game's own default (Gomoku's is 4).
 let playerConfig = {
   1: { type: "human", sims: 25600, selector: 0, eloRank: 1, ply: 2 },
   2: { type: "model", sims: 25600, selector: 0, eloRank: 1, ply: 2 },
@@ -145,9 +146,9 @@ let moveGeneration = 0;
 // Thinking indicator state
 let thinkingStart = 0;
 // Elapsed-time display on the busy status ("Model thinking... 7 s"). It appears once a move has taken
-// kThinkingTimerDelayMs, so fast moves never show it, and refreshes every kThinkingTimerTickMs. A search
-// on the main thread (the single-thread engine, or any heuristic move) blocks the timer, so there the
-// status keeps its plain "thinking..." text until the move lands.
+// kThinkingTimerDelayMs, so fast moves never show it, and refreshes every kThinkingTimerTickMs. A model
+// search on the main thread (the single-thread engine) blocks the timer, so there the status keeps its
+// plain "thinking..." text until the move lands. Heuristic moves run in a Web Worker, so the timer runs.
 const kThinkingTimerDelayMs = 1000;
 const kThinkingTimerTickMs = 250;
 let thinkingTimerId = 0;
@@ -260,6 +261,8 @@ const GOMOKU_SIMS_OPTIONS = [0, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800,
 // a stale dropdown value over the restored/default sims, so a pre-load 25600 / v2's 12800 stuck).
 const SIMS_DEFAULTS_VERSION = 4;
 const HEURISTIC_PLY_OPTIONS = [1, 2, 3, 4, 5, 6];
+// Gomoku stops at ply 5. In the browser a ply 6 move took a median 40 s and up to about 7 minutes.
+const GOMOKU_HEURISTIC_PLY_OPTIONS = [1, 2, 3, 4, 5];
 const C4_HEURISTIC_PLY_OPTIONS = [6, 8, 10, 11, 12, 13];
 // reviewer-flagged (cap at ply 6 or add a latency tooltip for ply 7-8): rejected
 // — consistent with C4_HEURISTIC_PLY_OPTIONS, which already exposes alpha-beta
@@ -325,7 +328,9 @@ function buildGameConfig() {
       name: "Gomoku",
       simsOptions: GOMOKU_SIMS_OPTIONS,
       defaultSims: 3200,  // Phase 0: lowered from 6400 for faster interactive play (slider retains max)
-      defaultHeuristicPly: 2,
+      // The wasm Gomoku opponent searches only cells near stones (CandidateRule::NearStones), which makes ply 4 fast.
+      defaultHeuristicPly: 4,
+      heuristicPlyOptions: GOMOKU_HEURISTIC_PLY_OPTIONS,
       cssClass: "gomoku",
       sideLabels: { 1: "Black (first)", 2: "White (second)" },
       pieceText: { 1: "\u25CF", 2: "\u25CB" },
@@ -665,11 +670,11 @@ function resetThinking() {
 async function runMoveWithThinking(player, gen) {
   showThinking(player);
   // Only a MODEL move dispatches a pooled coordinator, so only it needs the §9.4 control lock. A
-  // heuristic move runs synchronously on the main thread (no pool, no UAF), so locking for it would
-  // just flicker the controls disabled/enabled across the rAF for no benefit (a regression vs the old
-  // synchronous path). If the config flips model<->heuristic during the rAF it bumps moveGeneration,
-  // which the guard below catches BEFORE makeMoveForPlayer, so this captured flag can't desync from
-  // the move that actually runs — and the finally releases exactly what was acquired.
+  // heuristic move runs in its own Web Worker that touches no gState (no pool, no UAF), so it needs no
+  // lock, and the controls stay usable while it searches (a superseded move is discarded). If the
+  // config flips model<->heuristic during the rAF it bumps moveGeneration, which the guard below
+  // catches BEFORE makeMoveForPlayer, so this captured flag can't desync from the move that actually
+  // runs — and the finally releases exactly what was acquired.
   const isModelMove = playerConfig[player]?.type === "model";
   if (isModelMove) setSearchInFlight(true);
   try {
@@ -923,7 +928,8 @@ function updatePlayerControls(player) {
       const options = getHeuristicPlyOptions();
       const defaultPly = getDefaultHeuristicPly();
       strengthSelect.value = "";  // cfg.ply is authoritative — don't preserve a stale DOM value (see sims above)
-      setSelectNumericOptions(strengthSelect, options, cfg.ply ?? defaultPly);
+      // A ply this game doesn't offer (for example one set for another game) falls back to the game's default.
+      setSelectNumericOptions(strengthSelect, options, options.includes(cfg.ply) ? cfg.ply : defaultPly);
       const parsedPly = Number(strengthSelect.value);
       cfg.ply = Number.isFinite(parsedPly) && parsedPly >= 1 ? parsedPly : defaultPly;
     }
@@ -2063,9 +2069,9 @@ function handleBoardClick(event) {
 // --- Computer move ---
 
 // Async (PLAN §9.2): the threaded model move runs OFF the main thread via the start/poll shared
-// call shape (runModelSearch); the sync fallback resolves immediately. Heuristic moves stay
-// synchronous (they are fast and never use the pool). Callers must `await` this (see
-// runMoveWithThinking / playHeadlessGame). Stale results are rejected via moveGeneration.
+// call shape (runModelSearch); the sync fallback resolves immediately. Heuristic moves run in a Web
+// Worker (requestHeuristicMove). Callers must `await` this (see runMoveWithThinking /
+// playHeadlessGame). Stale results are rejected via moveGeneration and searchCancelEpoch.
 async function makeMoveForPlayer(player) {
   if (!loaded || gameOver) return;
   const cfg = playerConfig[player];
@@ -2105,8 +2111,12 @@ async function makeMoveForPlayer(player) {
     }
     strength = Math.max(1, cfg.ply ?? getDefaultHeuristicPly());
     const t0h = performance.now();
-    move = Module._wasm_select_move_heuristic(boardPtr, movePlayerTurn, strength);
+    const res = await requestHeuristicMove(movePlayerTurn, strength);
     console.log(`heuristic move: ${(performance.now() - t0h).toFixed(1)}ms (ply=${strength})`);
+    if (res === HEURISTIC_CANCELLED || searchCancelEpoch !== cancelEpoch || gen !== moveGeneration || gameOver)
+      return;
+    move = res.move;
+    if (res.counted) noteHeuristicMove(movePlayerTurn);
   } else {
     strength = Math.max(0, cfg.sims ?? getDefaultModelSims());
     const t0m = performance.now();
@@ -2130,9 +2140,8 @@ async function makeMoveForPlayer(player) {
     move = res.move;
   }
 
-  // A mutation between capture and here (heuristic path can't hit this; the model path already
-  // re-checked this at the status-routing block above, so for it this is a redundant no-op — but
-  // guard uniformly so both paths share one barrier).
+  // A mutation between capture and here. Both branches above already re-checked this after their
+  // await, so this is a redundant no-op today, kept so every path shares one barrier.
   if (gen !== moveGeneration || gameOver) return;
 
   // For Othello, move < 0 may indicate a pass — don't error out early
@@ -2958,7 +2967,14 @@ async function playHeadlessGame(p1GoesFirst) {
 
     if (cfg.type === "heuristic") {
       const strength = Math.max(1, cfg.ply ?? getDefaultHeuristicPly());
-      move = Module._wasm_select_move_heuristic(boardPtr, currentTurn, strength);
+      // Off the main thread like the model branch below. A cancelled job means a mutation is
+      // superseding this game, so stop the batch without tallying, as for a cancelled model search.
+      const cancelEpoch = searchCancelEpoch;
+      const res = await requestHeuristicMove(currentTurn, strength);
+      if (res === HEURISTIC_CANCELLED || searchCancelEpoch !== cancelEpoch)
+        return { cancelled: true };
+      move = res.move;
+      if (res.counted) noteHeuristicMove(currentTurn);
     } else {
       const strength = Math.max(0, cfg.sims ?? getDefaultModelSims());
       // Route through the shared async call shape so the threaded engine runs OFF the main thread
@@ -4369,6 +4385,7 @@ function beginModelSearch(turnSide, strength) {
 // use-after-free. The UAF invariant is pinned on Promise-resolution: when `activeSearch` resolves,
 // every worker has destroyed its per-move Clone() and holds no reference into gState.cnnNet.
 async function cancelAndQuiesceSearch() {
+  cancelHeuristicJob();
   const search = activeSearch;
   if (!search) return;
   // Invalidate any in-flight move BEFORE the await: if its coordinator publishes SEARCH_OK in the
@@ -4380,6 +4397,108 @@ async function cancelAndQuiesceSearch() {
     Module._wasm_cancel_search();
   }
   try { await search; } catch (e) { /* a fatal search still quiesces the pool */ }
+}
+
+// --- Heuristic moves in a Web Worker -------------------------------------------------------------
+
+// Built-in heuristic moves run in web/heuristic-worker.js, which hosts its own single-thread engine,
+// so a deep search (a Gomoku ply 5 move can take tens of seconds) doesn't freeze the page. The worker loads
+// no save and touches no gState, so the page needs no control lock while it searches: stale results
+// are discarded by the moveGeneration / searchCancelEpoch checks after the await, like model moves.
+// One job runs at a time. A new request, or cancelAndQuiesceSearch(), ends the worker and resolves
+// the pending job as cancelled, so a superseded search stops using a core. The page's module stays
+// the only owner of the per-side heuristic move counts: the request carries the side's count, and the
+// caller advances it (noteHeuristicMove) only when it plays the move. If the worker can't start or
+// fails, heuristic moves fall back to the synchronous export for the rest of the page's life.
+const HEURISTIC_CANCELLED = Object.freeze({ cancelled: true });
+let heuristicWorker = null;
+let heuristicWorkerDisabled = false;
+let heuristicJob = null; // { id, resolve, fallback } for the job the worker is running
+let heuristicJobSeq = 0;
+
+function canUseHeuristicWorker() {
+  return !heuristicWorkerDisabled && typeof Worker === "function" && Module &&
+    typeof Module._wasm_get_heuristic_move_count === "function" &&
+    typeof Module._wasm_note_heuristic_move === "function";
+}
+
+function stopHeuristicWorker() {
+  if (heuristicWorker) heuristicWorker.terminate();
+  heuristicWorker = null;
+}
+
+// End the running job (if any) and resolve it as cancelled.
+function cancelHeuristicJob() {
+  const job = heuristicJob;
+  if (!job) return;
+  heuristicJob = null;
+  stopHeuristicWorker();
+  job.resolve(HEURISTIC_CANCELLED);
+}
+
+// Switch to the synchronous path for good, and finish the running job (if any) on it.
+function disableHeuristicWorker(reason) {
+  console.warn("[heuristic] worker unavailable; heuristic moves run on the main thread:", reason);
+  heuristicWorkerDisabled = true;
+  const job = heuristicJob;
+  heuristicJob = null;
+  stopHeuristicWorker();
+  if (job) job.resolve(job.fallback());
+}
+
+function ensureHeuristicWorker() {
+  if (heuristicWorker) return heuristicWorker;
+  try {
+    const w = new Worker(new URL("heuristic-worker.js", import.meta.url));
+    w.onmessage = (e) => {
+      const job = heuristicJob;
+      if (!job || e.data.id !== job.id) return;
+      if (e.data.error) { disableHeuristicWorker(e.data.error); return; }
+      heuristicJob = null;
+      job.resolve({ move: e.data.move, counted: e.data.counted === true });
+    };
+    w.onerror = (e) => {
+      e.preventDefault();
+      disableHeuristicWorker(e.message || "worker error");
+    };
+    heuristicWorker = w;
+  } catch (err) {
+    disableHeuristicWorker(err);
+  }
+  return heuristicWorker;
+}
+
+// The synchronous path: the page's own export, which advances the move count itself.
+function selectHeuristicMoveSync(turnSide, ply) {
+  copyBoardToWasm();
+  return { move: Module._wasm_select_move_heuristic(boardPtr, turnSide, ply), counted: false };
+}
+
+// Resolves with { move, counted } or HEURISTIC_CANCELLED. When `counted` is true the caller must call
+// noteHeuristicMove(turnSide) if, and only if, it plays the move.
+function requestHeuristicMove(turnSide, ply) {
+  cancelHeuristicJob();
+  const fallback = () => selectHeuristicMoveSync(turnSide, ply);
+  if (!canUseHeuristicWorker() || !ensureHeuristicWorker()) return Promise.resolve(fallback());
+  return new Promise((resolve) => {
+    const id = ++heuristicJobSeq;
+    heuristicJob = { id, resolve, fallback };
+    heuristicWorker.postMessage({
+      id,
+      gameType: Module._wasm_get_game_type(),
+      width,
+      height,
+      winLength,
+      board: Int32Array.from(board),
+      turn: turnSide,
+      ply,
+      moveCount: Module._wasm_get_heuristic_move_count(turnSide),
+    });
+  });
+}
+
+function noteHeuristicMove(turnSide) {
+  Module._wasm_note_heuristic_move(turnSide);
 }
 
 // §9.4 "simplest safe form": disable board/config-mutating controls while a THREADED search is in

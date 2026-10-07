@@ -140,7 +140,7 @@
       "neatMember": null,
       "sims": 3200,
       "simsThreaded": 3200,
-      "heuristicPly": 3,
+      "heuristicPly": 4,
       "blurb": "AlphaZero-lite 8x96 CNN on 13x13 freestyle Gomoku (five in a row), trained by population self-play. Against the TSS heuristic playing its best move it wins 96% of games, and against the Rapfi engine held to 64 nodes a move it scores 48%.",
       "notice": "This 13x13 net searches 3,200 positions a move. That takes a few seconds on a desktop and longer on laptops and phones, or half a minute or more where the browser runs the search on one thread.",
       "source": {
