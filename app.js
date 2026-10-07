@@ -328,8 +328,9 @@ function buildGameConfig() {
       name: "Gomoku",
       simsOptions: GOMOKU_SIMS_OPTIONS,
       defaultSims: 3200,  // Phase 0: lowered from 6400 for faster interactive play (slider retains max)
-      // The wasm Gomoku opponent searches only cells near stones (CandidateRule::NearStones), which makes ply 4 fast.
-      defaultHeuristicPly: 4,
+      // The wasm Gomoku opponent searches only cells near stones (CandidateRule::NearStones), which makes ply 5
+      // about as quick as the net's own 3,200-sim move.
+      defaultHeuristicPly: 5,
       heuristicPlyOptions: GOMOKU_HEURISTIC_PLY_OPTIONS,
       cssClass: "gomoku",
       sideLabels: { 1: "Black (first)", 2: "White (second)" },
