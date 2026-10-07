@@ -640,14 +640,17 @@ function stopThinkingTimer() {
   thinkingTimerId = 0;
 }
 
+function formatThinkTime(ms) {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+}
+
 function finishThinking(player) {
   const elapsed = thinkingStart > 0 ? performance.now() - thinkingStart : 0;
   thinkingStart = 0;
   stopThinkingTimer();
   clearStatusBusy();
   if (gameOver || errorLine.textContent) return;
-  const timeStr = elapsed >= 1000 ? `${(elapsed / 1000).toFixed(1)}s` : `${Math.round(elapsed)}ms`;
-  const msg = `${playerName(player)} moved (${timeStr})`;
+  const msg = `${playerName(player)} moved (${formatThinkTime(elapsed)})`;
   if (isOthello() || isHuman(turn)) {
     // Don't overwrite Othello pass notices or "Your turn" — record the timing in the history trail.
     pushStatusHistory(msg);
@@ -1982,11 +1985,11 @@ function onGameOver() {
   updateTranscriptPanel(); // show final result + final-position board
 }
 
-function finalizeMove(row, col, piece) {
+function finalizeMove(row, col, piece, thinkMs) {
   const idx = row * width + col;
   board[idx] = piece;
   updateCell(idx);
-  moveHistory.push({ idx, piece });
+  moveHistory.push({ idx, piece, thinkMs });
   updateUndoState();
 
   if (isHex()) {
@@ -2100,6 +2103,8 @@ async function makeMoveForPlayer(player) {
   // movePlayerTurn — while the turn-flip (`turn = turn===1?2:1`) must still read/write the global —
   // would leave an inconsistent split in the hot move-application path for no current benefit.
 
+  // The search time goes into the move's history entry, and the transcript shows it.
+  const searchStart = performance.now();
   if (cfg.type === "heuristic") {
     if (!canUseHeuristicOpponent()) {
       setError("Heuristic opponent is not available for this game.");
@@ -2110,16 +2115,14 @@ async function makeMoveForPlayer(player) {
       return;
     }
     strength = Math.max(1, cfg.ply ?? getDefaultHeuristicPly());
-    const t0h = performance.now();
     const res = await requestHeuristicMove(movePlayerTurn, strength);
-    console.log(`heuristic move: ${(performance.now() - t0h).toFixed(1)}ms (ply=${strength})`);
+    console.log(`heuristic move: ${(performance.now() - searchStart).toFixed(1)}ms (ply=${strength})`);
     if (res === HEURISTIC_CANCELLED || searchCancelEpoch !== cancelEpoch || gen !== moveGeneration || gameOver)
       return;
     move = res.move;
     if (res.counted) noteHeuristicMove(movePlayerTurn);
   } else {
     strength = Math.max(0, cfg.sims ?? getDefaultModelSims());
-    const t0m = performance.now();
     let res;
     try {
       res = await beginModelSearch(movePlayerTurn, strength);
@@ -2128,7 +2131,7 @@ async function makeMoveForPlayer(player) {
       setError("AI search failed.");
       return;
     }
-    console.log(`model move: ${(performance.now() - t0m).toFixed(1)}ms (sims=${strength}, thr=${usingThreadedEngine})`);
+    console.log(`model move: ${(performance.now() - searchStart).toFixed(1)}ms (sims=${strength}, thr=${usingThreadedEngine})`);
     // Route the terminal status (pinned-decision C): FATAL -> case-(3) reload; CANCELLED/stale ->
     // ignore (a superseding move / mutation already moved on); OK -> play the move below.
     if (res.status === SEARCH_FATAL) {
@@ -2139,6 +2142,8 @@ async function makeMoveForPlayer(player) {
         gen !== moveGeneration || gameOver) return;
     move = res.move;
   }
+
+  const thinkMs = performance.now() - searchStart;
 
   // A mutation between capture and here. Both branches above already re-checked this after their
   // await, so this is a redundant no-op today, kept so every path shares one barrier.
@@ -2154,7 +2159,7 @@ async function makeMoveForPlayer(player) {
     if (move === OTH_PASS_MOVE || move < 0) {
       if (cfg.type === "model") captureAiActivationSnapshot(-1, -1, strength, player);
       const passingPiece = turn;
-      moveHistory.push({ pass: true, piece: turn });
+      moveHistory.push({ pass: true, piece: turn, thinkMs });
       updateUndoState();
       turn = turn === 1 ? 2 : 1;
       resolveOthelloTurn(`${othelloPieceName(passingPiece)} passes.`);
@@ -2181,7 +2186,7 @@ async function makeMoveForPlayer(player) {
     const flips = applyOthelloMove(move, turn);
     if (!flips.length) { setError("AI selected an invalid move."); return; }
     if (cfg.type === "model") captureAiActivationSnapshot(row, col, strength, player);
-    moveHistory.push({ idx: move, piece: turn, flips });
+    moveHistory.push({ idx: move, piece: turn, flips, thinkMs });
     updateUndoState();
     turn = turn === 1 ? 2 : 1;
     resolveOthelloTurn();
@@ -2193,12 +2198,12 @@ async function makeMoveForPlayer(player) {
     const col = move % width;
     if (board[row * width + col] !== 0) { setError("AI selected an invalid move."); return; }
     if (cfg.type === "model") captureAiActivationSnapshot(row, col, strength, player);
-    finalizeMove(row, col, turn);
+    finalizeMove(row, col, turn, thinkMs);
   } else {
     const dropRow = findDropRow(move);
     if (dropRow < 0) { setError("AI selected a full column."); return; }
     if (cfg.type === "model") captureAiActivationSnapshot(dropRow, move, strength, player);
-    finalizeMove(dropRow, move, turn);
+    finalizeMove(dropRow, move, turn, thinkMs);
   }
 }
 
@@ -2964,6 +2969,7 @@ async function playHeadlessGame(p1GoesFirst) {
 
     copyBoardToWasm();
     let move;
+    const searchStart = performance.now();
 
     if (cfg.type === "heuristic") {
       const strength = Math.max(1, cfg.ply ?? getDefaultHeuristicPly());
@@ -2999,6 +3005,7 @@ async function playHeadlessGame(p1GoesFirst) {
         return { cancelled: true };
       move = res.move;
     }
+    const thinkMs = performance.now() - searchStart;
 
     if (isOthello()) {
       // Handle pass (OTH_PASS_MOVE) or engine error (negative)
@@ -3007,7 +3014,7 @@ async function playHeadlessGame(p1GoesFirst) {
         // Treat as pass — the legal move check below would handle it anyway
       }
       if (move === OTH_PASS_MOVE || move < 0) {
-        moves.push({ pass: true, piece: currentTurn });
+        moves.push({ pass: true, piece: currentTurn, thinkMs });
         // Check if opponent has moves
         const opp = currentTurn === 1 ? 2 : 1;
         const oppMoves = computeOthelloLegalMovesHeadless(board, width, height, opp);
@@ -3041,7 +3048,7 @@ async function playHeadlessGame(p1GoesFirst) {
       const flips = othelloFlipsForMoveHeadless(board, width, height, row, col, currentTurn);
       board[move] = currentTurn;
       for (const f of flips) board[f] = currentTurn;
-      moves.push({ idx: move, piece: currentTurn });
+      moves.push({ idx: move, piece: currentTurn, thinkMs });
       currentTurn = currentTurn === 1 ? 2 : 1;
       moveCount++;
 
@@ -3079,7 +3086,7 @@ async function playHeadlessGame(p1GoesFirst) {
     }
 
     board[row * width + col] = currentTurn;
-    moves.push({ idx: row * width + col, piece: currentTurn });
+    moves.push({ idx: row * width + col, piece: currentTurn, thinkMs });
     moveCount++;
 
     // Check win
@@ -3134,7 +3141,8 @@ function tallyResult(result, p1GoesFirst) {
 //
 // Builds a self-describing, LLM-friendly text log of the game(s). A game record
 // is { moves, finalBoard, winner, p1GoesFirst, winLine?, inProgress? } where:
-//   moves      : array of { piece, idx } | { piece, pass: true } (piece = board side 1/2)
+//   moves      : array of { piece, idx } | { piece, pass: true } (piece = board side 1/2), plus
+//                thinkMs (the search time) on a move a model or heuristic chose
 //   finalBoard : snapshot of board[] at game end
 //   winner     : board side 1/2, or 0 for a draw
 //   p1GoesFirst: true if UI Player 1's config played board side 1 this game
@@ -3274,7 +3282,8 @@ function composeGameSection(rec, index, total) {
     const slot = slotForSide(m.piece, rec.p1GoesFirst);
     const label = `P${slot} (${sideColorName(m.piece)})`;
     const coord = m.pass ? "pass" : cellLabel(m.idx);
-    lines.push(`  ${String(i + 1).padStart(numW)}. ${label.padEnd(13)} ${coord}`);
+    const time = Number.isFinite(m.thinkMs) ? `${coord.padEnd(5)} ${formatThinkTime(m.thinkMs)}` : coord;
+    lines.push(`  ${String(i + 1).padStart(numW)}. ${label.padEnd(13)} ${time}`);
   });
   if (rec.moves.length === 0) lines.push("  (no moves yet)");
 
