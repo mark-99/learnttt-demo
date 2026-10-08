@@ -508,9 +508,9 @@ function scheduleNextMove() {
   } else {
     const gen = moveGeneration;
     const p = turn;
-    // First rAF paints the human's move; runMoveWithThinking adds a second rAF
-    // so the "thinking..." status renders before the synchronous WASM call.
-    requestAnimationFrame(() => {
+    // The first frame paints the human's move, and runMoveWithThinking waits for a second one so the
+    // "thinking..." status renders before the search starts. Both waits fall back to a timer in a hidden tab.
+    onFrameOrTimer(() => {
       if (gen !== moveGeneration) return;
       runMoveWithThinking(p, gen).catch(e => setError(e?.message || String(e)));
     });
@@ -667,7 +667,7 @@ function resetThinking() {
   // History persists across moves (that's the point) — it's only cleared on a new game (resetBoard).
 }
 
-// Show thinking indicator, yield for paint, run makeMoveForPlayer, then clear. Async (PLAN §9.2):
+// Show thinking indicator, wait for a frame, run makeMoveForPlayer, then clear. Async (PLAN §9.2):
 // the move may run OFF the main thread (threaded engine), so this awaits it and the
 // finishThinking() cleanup fires only AFTER the awaited move (its finally, not a stale synchronous
 // one). setSearchInFlight disables mutating controls while a threaded search is live (§9.4).
@@ -676,13 +676,13 @@ async function runMoveWithThinking(player, gen) {
   // Only a MODEL move dispatches a pooled coordinator, so only it needs the §9.4 control lock. A
   // heuristic move runs in its own Web Worker that touches no gState (no pool, no UAF), so it needs no
   // lock, and the controls stay usable while it searches (a superseded move is discarded). If the
-  // config flips model<->heuristic during the rAF it bumps moveGeneration, which the guard below
+  // config flips model<->heuristic during that wait it bumps moveGeneration, which the guard below
   // catches BEFORE makeMoveForPlayer, so this captured flag can't desync from the move that actually
   // runs — and the finally releases exactly what was acquired.
   const isModelMove = playerConfig[player]?.type === "model";
   if (isModelMove) setSearchInFlight(true);
   try {
-    await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => onFrameOrTimer(r));
     if (gen !== moveGeneration) { resetThinking(); return; }
     try { await makeMoveForPlayer(player); } finally { finishThinking(player); }
   } finally {
@@ -4261,21 +4261,16 @@ function readMctsThreadOverride() {
 
 // --- Async move-search orchestration (PLAN §9.2) ------------------------------------------------
 
-// Poll cadence (ms) used when the tab is BACKGROUNDED. Browsers PAUSE requestAnimationFrame entirely
-// in a hidden tab, which would otherwise stall a threaded search's poll — and with it any CvC /
-// autoplay batch run that keeps going in the background — until the tab is foregrounded again (a
-// regression vs the old synchronous path, which blocked but still completed). NOTE: this is the
-// REQUESTED setTimeout delay; browsers clamp background timers to >=1s, so the EFFECTIVE hidden-tab
-// poll cadence is ~1s. That still completes the search — it just polls less often — so 250 is a
-// requested floor, not a guaranteed period.
+// Timer delay (ms) used when the tab is hidden. Browsers pause requestAnimationFrame in a hidden tab
+// (a locked desktop counts as hidden), so a move or search poll that waits only for a frame stops
+// until the tab is visible again. Browsers clamp background timers to at least 1 s, so the real
+// hidden-tab cadence is about 1 s or slower.
 const kHiddenPollMs = 250;
 
-// Schedule the next search poll. Races an rAF (smooth, ~16ms, when the tab is visible) against a
-// setTimeout (still fires when the tab is hidden, throttled to ~1s); whichever fires first wins and
-// cancels the other, so polling continues in a backgrounded tab. §9.2 allows "rAF or a postMessage
-// done-flag"; this is the rAF path with a hidden-tab timer backstop. Falls back to setTimeout-only
-// where rAF is absent (headless — though headless callers poll directly, not via this path).
-function scheduleSearchPoll(fn) {
+// Run fn on the next animation frame, or after kHiddenPollMs if no frame comes (a hidden tab). The
+// first to fire cancels the other. Search polling and the pre-move paint wait both use it, so a CvC
+// game or batch keeps playing in a background tab. Without rAF it uses the timer only.
+function onFrameOrTimer(fn) {
   if (typeof requestAnimationFrame !== "function") { setTimeout(fn, kHiddenPollMs); return; }
   let fired = false;
   const run = () => { if (fired) return; fired = true; clearTimeout(timer); fn(); };
@@ -4319,10 +4314,10 @@ function runModelSearch(turnSide, strength) {
               resolve({ status: SEARCH_FATAL, move: -1 });
               return;
             }
-            if (status === SEARCH_RUNNING) { scheduleSearchPoll(pollFatal); return; }
+            if (status === SEARCH_RUNNING) { onFrameOrTimer(pollFatal); return; }
             resolve({ status: SEARCH_FATAL, move: -1 });
           };
-          scheduleSearchPoll(pollFatal);
+          onFrameOrTimer(pollFatal);
           return;
         }
         const poll = () => {
@@ -4343,15 +4338,15 @@ function runModelSearch(turnSide, strength) {
             resolve({ status: SEARCH_FATAL, move: -1 });
             return;
           }
-          if (status === SEARCH_RUNNING) { scheduleSearchPoll(poll); return; }
+          if (status === SEARCH_RUNNING) { onFrameOrTimer(poll); return; }
           const move = Module.HEAP32[outPtr >> 2];
           Module._free(outPtr);
           resolve({ status, move });
         };
         // Poll off the event loop (never blocks, never Atomics.wait — PLAN §9.2) so any
-        // main-thread-proxied worker spawn is serviced. scheduleSearchPoll keeps firing even when the
+        // main-thread-proxied worker spawn is serviced. onFrameOrTimer keeps firing even when the
         // tab is backgrounded (rAF alone would pause), so CvC/autoplay batch runs don't stall.
-        scheduleSearchPoll(poll);
+        onFrameOrTimer(poll);
       });
       return { promise, inFlight: true };
     }
