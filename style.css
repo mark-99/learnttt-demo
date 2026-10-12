@@ -1444,3 +1444,13 @@ details.advanced > summary:focus-visible {
 details.advanced > .controls-files {
   margin-top: 10px;
 }
+
+/* Build stamp footer (web/build-stamp.js). Uses --muted, the page's only theme colour for secondary text. */
+.build-stamp {
+  margin: 24px 0 12px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+  opacity: 0.8;
+  user-select: all;
+}

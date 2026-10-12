@@ -8,6 +8,7 @@ import {
   SEARCH_CANCELLED,
   SEARCH_FATAL,
 } from "./engine-select.js";
+import { loadBuildStamp } from "./build-stamp.js";
 
 let ModulePromise = null;
 let Module = null;
@@ -4722,6 +4723,9 @@ function init() {
   window.__demo = {
     isDemo: demoMode,
     ready: demoReady,
+    // Promise of {sha, builtAt, text} for the footer build stamp (null fields and "build unknown" when
+    // web/build-stamp.json is missing). Never rejects.
+    buildStamp: loadBuildStamp(document.getElementById("buildStamp")),
     loadModel: (file) => runCoordinatedLoad(() => loadSaveFile(file), "tab"),
     onLoadResult: (cb) => { demoLoadSubscribers.add(cb); return () => demoLoadSubscribers.delete(cb); },
     getModelMeta: demoModelMeta,

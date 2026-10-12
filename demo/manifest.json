@@ -139,10 +139,10 @@
       },
       "neatMember": null,
       "sims": 3200,
-      "simsThreaded": 3200,
+      "simsThreaded": 6400,
       "heuristicPly": 5,
       "blurb": "AlphaZero-lite 7x64 CNN on 13x13 freestyle Gomoku (five in a row), trained from scratch on the games of a larger 8x96 net. Against the Rapfi engine held to 256 nodes a move it scores 78% from opening positions, where the 8x96 net scores 41%.",
-      "notice": "This 13x13 net searches 3,200 positions a move. That takes about two seconds on a desktop and longer on laptops and phones, or ten seconds or more where the browser runs the search on one thread.",
+      "notice": "This 13x13 net searches 6,400 positions a move. That takes about four seconds on a desktop and longer on laptops and phones. Where the browser runs the search on one thread, it searches 3,200 positions, which takes ten seconds or more.",
       "source": {
         "metric": "pinned",
         "canonical": "saves/gomoku-step2-s7x64-seed11.sav",
