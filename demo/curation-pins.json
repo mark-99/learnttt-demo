@@ -25,7 +25,11 @@
   "games": {
     "ttt": {
       "label": "Tic-Tac-Toe",
-      "boardVariant": { "width": 3, "height": 3, "winLength": 3 },
+      "boardVariant": {
+        "width": 3,
+        "height": 3,
+        "winLength": 3
+      },
       "metric": "none (solved; BvH trivially saturated)",
       "csv": null,
       "pin": "saves/ttt.sav.zst",
@@ -39,7 +43,11 @@
     },
     "connect4": {
       "label": "Connect 4",
-      "boardVariant": { "width": 7, "height": 6, "winLength": 4 },
+      "boardVariant": {
+        "width": 7,
+        "height": 6,
+        "winLength": 4
+      },
       "metric": "noisy solver (docs/BRIEF-connect4-noisy-solver.md section 5)",
       "csv": null,
       "pin": "saves/c4cnn2-6x64-seed12-g275000.sav",
@@ -51,7 +59,11 @@
     },
     "othello": {
       "label": "Othello",
-      "boardVariant": { "width": 8, "height": 8, "winLength": 0 },
+      "boardVariant": {
+        "width": 8,
+        "height": 8,
+        "winLength": 0
+      },
       "metric": "edax",
       "csv": "saves/othello-edax-ladder.csv",
       "pin": "saves/othello-c15gen2-seed11.sav",
@@ -67,7 +79,11 @@
     },
     "hex": {
       "label": "Hex",
-      "boardVariant": { "width": 11, "height": 11, "winLength": 0 },
+      "boardVariant": {
+        "width": 11,
+        "height": 11,
+        "winLength": 0
+      },
       "metric": "bvh",
       "csv": "saves/hex-alphazero-11x11-rc500k-ep100-cnn5x48-sweep.csv",
       "pin": "saves/hex-alphazero-11x11-rc500k-ep100-cnn5x48.sav",
@@ -83,19 +99,23 @@
     },
     "gomoku": {
       "label": "Gomoku",
-      "boardVariant": { "width": 13, "height": 13, "winLength": 5 },
-      "metric": "pinned (operator decision, docs/BRIEF-gomoku-rapfi-read.md section 10.3)",
+      "boardVariant": {
+        "width": 13,
+        "height": 13,
+        "winLength": 5
+      },
+      "metric": "pinned (operator decision 2026-10-12, docs/BRIEF-gomoku-deploy.md section 10)",
       "csv": null,
-      "pin": "saves/gomoku-13x13-cnn8x96-pbt-champion-ema.sav",
-      "strategy": "ALPHAZERO_CNN cnn8x96 (PBT champion, EMA weights, cpuct 2.5)",
+      "pin": "saves/gomoku-step2-s7x64-seed11.sav",
+      "strategy": "ALPHAZERO_CNN cnn7x64 (Step 2 corpus student, EMA weights, cpuct 2.5, fpu reduction 0)",
       "evalSims": 3200,
       "gatePly": null,
       "strip": true,
-      "bundledCycles": 167300,
-      "approxRawMB_full": 70.9,
-      "approxRawMB_stripped": 33.1,
-      "approxZstMB": 12.1,
-      "note": "13x13 win-5 (freestyle) cnn8x96 PBT champion (slot 7 at 167,300 cycles), EMA weights, cpuct 2.5, exported from the champion sidecar (docs/PLAN-gomoku-rapfi-yardstick.md section 3.6). Pinned 2026-10-06 by operator decision, outside the pre-registered rule of docs/BRIEF-gomoku-rapfi-read.md section 5: conditions 1 to 3 passed, condition 4 (a 3,200-sim move under 2 s on 8 workers) failed at about 4.3 s, and the operator kept 3,200 sims and let move time vary by device (section 10.3). Read at 3,200 sims over 200 openings, both colours: argmax TSS 0.963 [0.943, 0.980] at ply 3 and 0.960 [0.940, 0.978] at ply 4; Rapfi 0.761 at 16 nodes, 0.482 at 64, 0.310 at 256. bundledCycles is pinned because the save's 'cycles 31400' header comes from the template save the export took its configs from. No replay buffer; the strip drops cnn_adam_state and an empty champion pool (70.9MB -> 33.1MB raw / 12.1MB zst). heuristicPly is 5 because the web opponent classifies threats through a lookup table, searches only the empty cells within 2 of a stone (docs/PLAN-gomoku-heuristic-speedup.md) and runs in a Web Worker. In a visual batch of 6 games against this net at 3,200 sims on the live site (headless Chrome on this box), the ply 5 heuristic took a median 3.4 s a move (max 26 s) over 129 moves, against a median 4.8 s for the net's own 8-worker move. Ply 6 took a median 40 s, so the Gomoku ply list stops at 5. Before the speed-up the heuristic took a median 19.5 s at ply 4 (max 32 s), so the pin first used ply 3 (median 1.6 s). Replaced the 11x11 cnn5x48 pin saves/gomoku-alphazero-11x11-lr0p0003-rc500k-ep100-cnn5x48.sav (100% BvH), which stays in saves/."
+      "approxRawMB_full": 31.4,
+      "approxRawMB_stripped": 14.7,
+      "approxZstMB": 5.3,
+      "note": "13x13 win-5 (freestyle) cnn7x64 student s7x64-seed11 of Gomoku Step 2 (docs/BRIEF-gomoku-step2-corpus.md), trained 127,568 steps from random weights on a corpus of the cnn8x96 PBT champion's games, EMA weights, cpuct 2.5, played with first-play urgency r = 0 (fpuReduction 0). Goal read (docs/BRIEF-gomoku-goal-read.md section 9): at 3,200 sims, 0.777 [0.757, 0.797] against Rapfi level 3 (256 nodes) on 800 fresh openings, where the previous pin scored 0.414. Deploy brief (docs/BRIEF-gomoku-deploy.md section 10): from the empty board, with both nets sampling below 4 stones, candidate minus the previous pin +0.079 [+0.049, +0.110] against Rapfi level 3 (non-inferiority PASS at 0.05); web r = 0 visits match the native search; a 3,200-sim move takes 1.8 s on 8 workers and 13.3 s on 1. The save header reads cycles 0, which is true for a corpus-trained net. The strip drops the replay buffer, cnn_adam_state and an empty champion pool (31.4MB -> 14.7MB raw / 5.3MB zst). heuristicPly stays 5. Replaced the cnn8x96 PBT champion pin saves/gomoku-13x13-cnn8x96-pbt-champion-ema.sav, which stays in saves/.",
+      "fpuReduction": 0
     }
   }
 }

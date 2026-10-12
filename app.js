@@ -37,7 +37,8 @@ let activeSearch = null;
 // moveGeneration to detect an unrelated save-load across their await.
 let searchCancelEpoch = 0;
 // Depth-counted lock so an in-flight threaded search disables board/config-mutating controls
-// (§9.4 "simplest safe form"); the sync fallback blocks the main thread so it needs no lock.
+// (§9.4 "simplest safe form"), and a model-worker search takes the same lock. A main-thread search
+// blocks the page, so it needs no lock.
 let searchLockDepth = 0;
 // sessionStorage key: a case-(2)/(3) fixed-heap OOM sets it, then reloads into the growable
 // non-threaded bundle which reads it and skips the threaded upgrade (PLAN §8.3).
@@ -147,8 +148,9 @@ let moveGeneration = 0;
 let thinkingStart = 0;
 // Elapsed-time display on the busy status ("Model thinking... 7 s"). It appears once a move has taken
 // kThinkingTimerDelayMs, so fast moves never show it, and refreshes every kThinkingTimerTickMs. A model
-// search on the main thread (the single-thread engine) blocks the timer, so there the status keeps its
-// plain "thinking..." text until the move lands. Heuristic moves run in a Web Worker, so the timer runs.
+// search on the main thread (a NEAT save on the single-thread engine, or a CNN save after the model
+// worker failed) blocks the timer, so there the status keeps its plain "thinking..." text until the
+// move lands. Heuristic moves and the other model searches run off the main thread, so the timer runs.
 const kThinkingTimerDelayMs = 1000;
 const kThinkingTimerTickMs = 250;
 let thinkingTimerId = 0;
@@ -673,20 +675,23 @@ function resetThinking() {
 // one). setSearchInFlight disables mutating controls while a threaded search is live (§9.4).
 async function runMoveWithThinking(player, gen) {
   showThinking(player);
-  // Only a MODEL move dispatches a pooled coordinator, so only it needs the §9.4 control lock. A
-  // heuristic move runs in its own Web Worker that touches no gState (no pool, no UAF), so it needs no
-  // lock, and the controls stay usable while it searches (a superseded move is discarded). If the
-  // config flips model<->heuristic during that wait it bumps moveGeneration, which the guard below
-  // catches BEFORE makeMoveForPlayer, so this captured flag can't desync from the move that actually
-  // runs — and the finally releases exactly what was acquired.
-  const isModelMove = playerConfig[player]?.type === "model";
-  if (isModelMove) setSearchInFlight(true);
+  // A MODEL move that searches off the main thread (the threaded engine's pooled coordinator, or the
+  // single-thread engine's model worker) holds the §9.4 control lock. The threaded engine needs it
+  // against a use-after-free. The model worker needs it because the page stays live for the whole
+  // search, and an unlocked Batch, Step or config change would run beside it. A main-thread search
+  // blocks the page, and a heuristic move runs in its own Web Worker that touches no gState (a
+  // superseded move is discarded), so neither takes the lock. If the config flips model<->heuristic
+  // during that wait it bumps moveGeneration, which the guard below catches BEFORE makeMoveForPlayer,
+  // so this captured flag can't desync from the move that actually runs, and the finally releases
+  // exactly what was acquired even if the model worker is disabled mid-search.
+  const lockControls = playerConfig[player]?.type === "model" && (usingThreadedEngine || canUseModelWorker());
+  if (lockControls) setSearchInFlight(true);
   try {
     await new Promise((r) => onFrameOrTimer(r));
     if (gen !== moveGeneration) { resetThinking(); return; }
     try { await makeMoveForPlayer(player); } finally { finishThinking(player); }
   } finally {
-    if (isModelMove) setSearchInFlight(false);
+    if (lockControls) setSearchInFlight(false);
   }
 }
 
@@ -3496,6 +3501,9 @@ async function loadSaveFile(file) {
   // in — else that load would free the net under a live worker (the UAF this barrier prevents).
   await cancelAndQuiesceSearch();
   if (gen !== moveGeneration) { Module._free(ptr); return { ok: false, stale: true }; }  // superseded during the final quiesce; drop the alloc
+  // wasm_load_save replaces the page's engine state, so the worker's copy of the old save goes too.
+  setModelWorkerSave(null);
+  searchFpuReduction = null; // the engine's load clears it
   let res = -1;
   try {
     if (typeof Module._wasm_load_save !== "function") throw new Error("WASM export missing: wasm_load_save");
@@ -3579,6 +3587,8 @@ async function loadSaveFile(file) {
   // Classify CNN by the direct export, once, so isFixedTopologySave()/isNeatSave() are correct for the
   // rest of this load (selector coercion, UI gating) without re-calling into wasm on every render.
   isCnnModel = (typeof Module._wasm_is_cnn === "function") ? !!Module._wasm_is_cnn() : false;
+  // The single-thread bundle searches a CNN save in the model worker, which loads its own copy.
+  if (!usingThreadedEngine && isCnnModel) setModelWorkerSave(data);
 
   // Initialize max elo rank
   if (typeof Module._wasm_get_max_elo_rank === "function") {
@@ -4012,6 +4022,7 @@ function demoApplyMatchup(matchup) {
   loadGraphData();
   updateGraphModeAvailability();
   updatePlayInfo();
+  setSearchFpuReduction(m.fpuReduction);
   resetBoard();  // fresh game under the applied matchup
   return { ok: true };
 }
@@ -4365,9 +4376,10 @@ function runModelSearch(turnSide, strength) {
     console.warn("[engine] wasm_start_search rejected; ignoring this trigger");
     return { promise: Promise.resolve({ status: SEARCH_CANCELLED, move: -1 }), inFlight: false };
   }
-  // Non-threaded fallback bundle: synchronous main-thread search (no pool, no coordinator, no race).
-  const move = Module._wasm_select_move(boardPtr, turnSide, strength);
-  return { promise: Promise.resolve({ status: SEARCH_OK, move }), inFlight: false };
+  // Non-threaded fallback bundle: a CNN save searches in the model worker (requestWorkerModelMove),
+  // which touches no gState. Otherwise the synchronous main-thread search (no pool, no coordinator).
+  if (canUseModelWorker()) return { promise: requestWorkerModelMove(turnSide, strength), inFlight: false };
+  return { promise: Promise.resolve(selectModelMoveSync(turnSide, strength)), inFlight: false };
 }
 
 // Begin a model search and register a REAL in-flight pool search as the active search so
@@ -4390,7 +4402,8 @@ function beginModelSearch(turnSide, strength) {
 // use-after-free. The UAF invariant is pinned on Promise-resolution: when `activeSearch` resolves,
 // every worker has destroyed its per-move Clone() and holds no reference into gState.cnnNet.
 async function cancelAndQuiesceSearch() {
-  cancelHeuristicJob();
+  heuristicChannel.cancel();
+  modelChannel.cancel();
   const search = activeSearch;
   if (!search) return;
   // Invalidate any in-flight move BEFORE the await: if its coordinator publishes SEARCH_OK in the
@@ -4404,73 +4417,104 @@ async function cancelAndQuiesceSearch() {
   try { await search; } catch (e) { /* a fatal search still quiesces the pool */ }
 }
 
-// --- Heuristic moves in a Web Worker -------------------------------------------------------------
+// --- Search workers -----------------------------------------------------------------------------
+
+// A dedicated Web Worker that runs one search job at a time, shared by the heuristic worker and the
+// model worker below. request(messages, fallback) ends any running job (resolving it with `cancelled`),
+// posts the messages built for the new job id, and resolves with mapReply(reply). cancel() ends the
+// running job the same way. If the worker can't start or reports an error, the channel logs a warning
+// and runs every later job through `fallback` on the main thread for the rest of the page's life, and
+// finishes the running job (if any) on it. A fallback that throws rejects the job, so the caller's own
+// error handling runs. onNewWorker runs for each new worker, before its first message.
+// reviewer-flagged (worker killed by the browser with no error event leaves the job pending), NOT
+// taken: no browser we test does that, and the next New Game, Undo or save load cancels the job.
+function createWorkerChannel({ script, tag, cancelled, mapReply, onNewWorker, onDisable }) {
+  let worker = null;
+  let disabled = false;
+  let job = null; // { id, resolve, reject, fallback } for the job the worker is running
+  let seq = 0;
+
+  const stop = () => {
+    if (worker) worker.terminate();
+    worker = null;
+  };
+  const settleOnMainThread = (j) => {
+    try { j.resolve(j.fallback()); } catch (err) { j.reject(err); }
+  };
+  const disable = (reason) => {
+    console.warn(`[${tag}] worker unavailable; ${tag} moves run on the main thread:`, reason);
+    disabled = true;
+    const j = job;
+    job = null;
+    stop();
+    onDisable?.();
+    if (j) settleOnMainThread(j);
+  };
+  const ensure = () => {
+    if (worker) return worker;
+    try {
+      const w = new Worker(new URL(script, import.meta.url));
+      w.onmessage = (e) => {
+        const j = job;
+        if (!j || e.data.id !== j.id) return;
+        if (e.data.error) { disable(e.data.error); return; }
+        job = null;
+        j.resolve(mapReply(e.data));
+      };
+      w.onerror = (e) => {
+        e.preventDefault();
+        disable(e.message || "worker error");
+      };
+      worker = w;
+      onNewWorker?.();
+    } catch (err) {
+      disable(err);
+    }
+    return worker;
+  };
+  const cancel = () => {
+    const j = job;
+    if (!j) return;
+    job = null;
+    stop();
+    j.resolve(cancelled);
+  };
+
+  return {
+    get usable() { return !disabled && typeof Worker === "function"; },
+    cancel,
+    // End the running job and the worker itself, so the next request starts a fresh worker.
+    reset() { cancel(); stop(); },
+    request(messages, fallback) {
+      cancel();
+      if (disabled || typeof Worker !== "function" || !ensure()) return Promise.resolve(fallback());
+      return new Promise((resolve, reject) => {
+        const id = ++seq;
+        job = { id, resolve, reject, fallback };
+        for (const m of messages(id)) worker.postMessage(m);
+      });
+    },
+  };
+}
 
 // Built-in heuristic moves run in web/heuristic-worker.js, which hosts its own single-thread engine,
 // so a deep search (a Gomoku ply 5 move can take tens of seconds) doesn't freeze the page. The worker loads
 // no save and touches no gState, so the page needs no control lock while it searches: stale results
 // are discarded by the moveGeneration / searchCancelEpoch checks after the await, like model moves.
-// One job runs at a time. A new request, or cancelAndQuiesceSearch(), ends the worker and resolves
-// the pending job as cancelled, so a superseded search stops using a core. The page's module stays
-// the only owner of the per-side heuristic move counts: the request carries the side's count, and the
-// caller advances it (noteHeuristicMove) only when it plays the move. If the worker can't start or
-// fails, heuristic moves fall back to the synchronous export for the rest of the page's life.
+// The page's module stays the only owner of the per-side heuristic move counts: the request carries
+// the side's count, and the caller advances it (noteHeuristicMove) only when it plays the move.
 const HEURISTIC_CANCELLED = Object.freeze({ cancelled: true });
-let heuristicWorker = null;
-let heuristicWorkerDisabled = false;
-let heuristicJob = null; // { id, resolve, fallback } for the job the worker is running
-let heuristicJobSeq = 0;
+const heuristicChannel = createWorkerChannel({
+  script: "heuristic-worker.js",
+  tag: "heuristic",
+  cancelled: HEURISTIC_CANCELLED,
+  mapReply: (reply) => ({ move: reply.move, counted: reply.counted === true }),
+});
 
 function canUseHeuristicWorker() {
-  return !heuristicWorkerDisabled && typeof Worker === "function" && Module &&
+  return heuristicChannel.usable && Module &&
     typeof Module._wasm_get_heuristic_move_count === "function" &&
     typeof Module._wasm_note_heuristic_move === "function";
-}
-
-function stopHeuristicWorker() {
-  if (heuristicWorker) heuristicWorker.terminate();
-  heuristicWorker = null;
-}
-
-// End the running job (if any) and resolve it as cancelled.
-function cancelHeuristicJob() {
-  const job = heuristicJob;
-  if (!job) return;
-  heuristicJob = null;
-  stopHeuristicWorker();
-  job.resolve(HEURISTIC_CANCELLED);
-}
-
-// Switch to the synchronous path for good, and finish the running job (if any) on it.
-function disableHeuristicWorker(reason) {
-  console.warn("[heuristic] worker unavailable; heuristic moves run on the main thread:", reason);
-  heuristicWorkerDisabled = true;
-  const job = heuristicJob;
-  heuristicJob = null;
-  stopHeuristicWorker();
-  if (job) job.resolve(job.fallback());
-}
-
-function ensureHeuristicWorker() {
-  if (heuristicWorker) return heuristicWorker;
-  try {
-    const w = new Worker(new URL("heuristic-worker.js", import.meta.url));
-    w.onmessage = (e) => {
-      const job = heuristicJob;
-      if (!job || e.data.id !== job.id) return;
-      if (e.data.error) { disableHeuristicWorker(e.data.error); return; }
-      heuristicJob = null;
-      job.resolve({ move: e.data.move, counted: e.data.counted === true });
-    };
-    w.onerror = (e) => {
-      e.preventDefault();
-      disableHeuristicWorker(e.message || "worker error");
-    };
-    heuristicWorker = w;
-  } catch (err) {
-    disableHeuristicWorker(err);
-  }
-  return heuristicWorker;
 }
 
 // The synchronous path: the page's own export, which advances the move count itself.
@@ -4482,40 +4526,110 @@ function selectHeuristicMoveSync(turnSide, ply) {
 // Resolves with { move, counted } or HEURISTIC_CANCELLED. When `counted` is true the caller must call
 // noteHeuristicMove(turnSide) if, and only if, it plays the move.
 function requestHeuristicMove(turnSide, ply) {
-  cancelHeuristicJob();
+  heuristicChannel.cancel();
   const fallback = () => selectHeuristicMoveSync(turnSide, ply);
-  if (!canUseHeuristicWorker() || !ensureHeuristicWorker()) return Promise.resolve(fallback());
-  return new Promise((resolve) => {
-    const id = ++heuristicJobSeq;
-    heuristicJob = { id, resolve, fallback };
-    heuristicWorker.postMessage({
-      id,
-      gameType: Module._wasm_get_game_type(),
-      width,
-      height,
-      winLength,
-      board: Int32Array.from(board),
-      turn: turnSide,
-      ply,
-      moveCount: Module._wasm_get_heuristic_move_count(turnSide),
-    });
-  });
+  if (!canUseHeuristicWorker()) return Promise.resolve(fallback());
+  return heuristicChannel.request((id) => [{
+    id,
+    gameType: Module._wasm_get_game_type(),
+    width,
+    height,
+    winLength,
+    board: Int32Array.from(board),
+    turn: turnSide,
+    ply,
+    moveCount: Module._wasm_get_heuristic_move_count(turnSide),
+  }], fallback);
 }
 
 function noteHeuristicMove(turnSide) {
   Module._wasm_note_heuristic_move(turnSide);
 }
 
-// §9.4 "simplest safe form": disable board/config-mutating controls while a THREADED search is in
-// flight (re-enable on resolve/reject). The sync fallback blocks the main thread, so it needs no
-// lock. The lock DEPTH is maintained UNCONDITIONALLY (even during autoplay/batch) so a mid-search
+// On the single-thread bundle a CNN model move runs in web/model-worker.js, which hosts its own
+// single-thread engine and its own copy of the save, so a long search (a 13x13 Gomoku move at 3,200
+// sims takes about half a minute on one thread) doesn't freeze the page. The threaded bundle already
+// searches off the main thread and never uses it. NEAT saves keep the synchronous path, because their
+// active net depends on selections the page computes (playoff, best-vs-heuristic), and their searches
+// are short. While the worker searches, runMoveWithThinking holds the same control lock as the threaded
+// engine (setSearchInFlight), and stale results are discarded by the moveGeneration / searchCancelEpoch
+// checks after the await. A completed search leaves the worker and its save loaded for the next move.
+// Cancelling a running search ends the worker, so the next move starts a fresh worker, which loads the
+// save again. The page keeps the decompressed save as a Blob for that (about 33 MB for the 13x13 net).
+let modelWorkerSave = null;    // { gen, blob } of the page's CNN save, or null
+let modelSaveGenSeq = 0;
+let modelWorkerLoadedGen = -1; // the save generation posted to the running worker
+// The search's first-play urgency from the demo manifest's `fpuReduction` (null = the historical
+// rule q = 0). A save load clears it in the engine, and demoApplyMatchup sets it again for the tab.
+// The model worker gets it with every search and reports the value it applied (modelWorkerFpu).
+let searchFpuReduction = null;
+let modelWorkerFpu = null;
+
+const modelChannel = createWorkerChannel({
+  script: "model-worker.js",
+  tag: "model",
+  cancelled: Object.freeze({ status: SEARCH_CANCELLED, move: -1 }),
+  mapReply: (reply) => {
+    modelWorkerFpu = reply.fpu;
+    return { status: SEARCH_OK, move: reply.move };
+  },
+  onNewWorker: () => { modelWorkerLoadedGen = -1; },
+  onDisable: () => { modelWorkerSave = null; },
+});
+
+// Record the save the worker should search with (null when the page has no CNN save), and end any
+// worker that holds an older one.
+function setModelWorkerSave(bytes) {
+  modelChannel.reset();
+  modelWorkerSave = bytes && modelChannel.usable ? { gen: ++modelSaveGenSeq, blob: new Blob([bytes]) } : null;
+}
+
+// Set the page engine's first-play urgency (a value >= 0, or anything else to clear it). The model
+// worker picks the value up with its next search.
+function setSearchFpuReduction(value) {
+  searchFpuReduction = Number.isFinite(value) && value >= 0 ? value : null;
+  if (typeof Module?._wasm_set_fpu_reduction === "function"
+      && Module._wasm_set_fpu_reduction(searchFpuReduction ?? -1) < 0)
+    console.warn("[model] first-play urgency not set: a search is in flight");
+}
+
+function canUseModelWorker() {
+  return !usingThreadedEngine && modelWorkerSave !== null && modelChannel.usable;
+}
+
+// The synchronous path on the page's own module. `snapshot`, when given, is copied to boardPtr first.
+function selectModelMoveSync(turnSide, sims, snapshot) {
+  if (snapshot) {
+    ensureBoardPtr(snapshot.length);
+    Module.HEAP32.set(snapshot, boardPtr >> 2);
+  }
+  return { status: SEARCH_OK, move: Module._wasm_select_move(boardPtr, turnSide, sims) };
+}
+
+// Resolves with { status, move } like runModelSearch. Searches the board the caller copied to boardPtr.
+function requestWorkerModelMove(turnSide, sims) {
+  const snapshot = Module.HEAP32.slice(boardPtr >> 2, (boardPtr >> 2) + board.length);
+  const save = modelWorkerSave;
+  return modelChannel.request((id) => {
+    const messages = [];
+    if (modelWorkerLoadedGen !== save.gen) {
+      messages.push({ type: "load", gen: save.gen, save: save.blob });
+      modelWorkerLoadedGen = save.gen;
+    }
+    messages.push({ type: "search", id, gen: save.gen, board: snapshot, turn: turnSide, sims, fpu: searchFpuReduction });
+    return messages;
+  }, () => selectModelMoveSync(turnSide, sims, snapshot));
+}
+
+// §9.4 "simplest safe form": disable board/config-mutating controls while an off-main-thread model
+// search is in flight (re-enable on resolve/reject). runMoveWithThinking decides which searches take
+// the lock (a threaded or model-worker search). The lock DEPTH is maintained UNCONDITIONALLY (even during autoplay/batch) so a mid-search
 // autoplay-state change can never strand the counter — an early `return` on the release side would
 // skip the matching decrement, leaving every LATER standalone search unable to disable its controls.
 // The UI TOGGLE, by contrast, only fires for a standalone interactive search (Step / human-vs-model):
 // autoplay/batch already own these controls for their whole duration via updateAutoplayButtons(), so
 // we don't fight them there.
 function setSearchInFlight(on) {
-  if (!usingThreadedEngine) return;
   if (on) {
     const wasIdle = searchLockDepth++ === 0;
     if (wasIdle && !autoPlay.batchMode && !autoPlay.running) {
@@ -4625,6 +4739,12 @@ function init() {
     // displayed failure can't leave play enabled against a partially-configured model. Idempotent — safe to
     // call when play is already disabled (load/verify failures already ran enterNoSaveState).
     invalidate: (msg) => enterNoSaveState(msg || "Load failed."),
+    // The first-play urgency the page engine holds and the one the model worker applied to its last
+    // search (-1 = clear, null = no worker search yet), for the deploy brief's wiring check.
+    fpuReduction: () => ({
+      engine: typeof Module?._wasm_get_fpu_reduction === "function" ? Module._wasm_get_fpu_reduction() : null,
+      worker: modelWorkerFpu,
+    }),
   };
 
   // Board clicks

@@ -88,6 +88,10 @@ export function validateManifest(manifest) {
     if (g.heuristicPly != null && !isPosInt(g.heuristicPly)) {
       errs.push(`${where}: \`heuristicPly\`, when present, must be a positive integer`);
     }
+    // fpuReduction: optional first-play urgency for the tab's net search (app.js setSearchFpuReduction).
+    if (g.fpuReduction != null && !(typeof g.fpuReduction === "number" && Number.isFinite(g.fpuReduction) && g.fpuReduction >= 0)) {
+      errs.push(`${where}: \`fpuReduction\`, when present, must be a number >= 0`);
+    }
     const m = g.defaultMatchup;
     if (!m || typeof m !== "object") errs.push(`${where}: missing \`defaultMatchup\` object`);
     else {
