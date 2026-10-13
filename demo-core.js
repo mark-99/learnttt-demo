@@ -88,9 +88,14 @@ export function validateManifest(manifest) {
     if (g.heuristicPly != null && !isPosInt(g.heuristicPly)) {
       errs.push(`${where}: \`heuristicPly\`, when present, must be a positive integer`);
     }
-    // fpuReduction: optional first-play urgency for the tab's net search (app.js setSearchFpuReduction).
+    // fpuReduction: optional first-play urgency for the tab's net search (app.js setSearchSettings).
     if (g.fpuReduction != null && !(typeof g.fpuReduction === "number" && Number.isFinite(g.fpuReduction) && g.fpuReduction >= 0)) {
       errs.push(`${where}: \`fpuReduction\`, when present, must be a number >= 0`);
+    }
+    // firstMoveRadius: optional TEMPORARY opening rule radius for the tab's net (docs/web-demo.md
+    // "Opening rule"; app.js setSearchSettings).
+    if (g.firstMoveRadius != null && !(Number.isInteger(g.firstMoveRadius) && g.firstMoveRadius >= 0)) {
+      errs.push(`${where}: \`firstMoveRadius\`, when present, must be an integer >= 0`);
     }
     const m = g.defaultMatchup;
     if (!m || typeof m !== "object") errs.push(`${where}: missing \`defaultMatchup\` object`);

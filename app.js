@@ -3504,7 +3504,7 @@ async function loadSaveFile(file) {
   if (gen !== moveGeneration) { Module._free(ptr); return { ok: false, stale: true }; }  // superseded during the final quiesce; drop the alloc
   // wasm_load_save replaces the page's engine state, so the worker's copy of the old save goes too.
   setModelWorkerSave(null);
-  searchFpuReduction = null; // the engine's load clears it
+  searchSettings = kNoSearchSettings; // the engine's load clears them
   let res = -1;
   try {
     if (typeof Module._wasm_load_save !== "function") throw new Error("WASM export missing: wasm_load_save");
@@ -4023,7 +4023,7 @@ function demoApplyMatchup(matchup) {
   loadGraphData();
   updateGraphModeAvailability();
   updatePlayInfo();
-  setSearchFpuReduction(m.fpuReduction);
+  setSearchSettings(m);
   resetBoard();  // fresh game under the applied matchup
   return { ok: true };
 }
@@ -4560,18 +4560,23 @@ function noteHeuristicMove(turnSide) {
 let modelWorkerSave = null;    // { gen, blob } of the page's CNN save, or null
 let modelSaveGenSeq = 0;
 let modelWorkerLoadedGen = -1; // the save generation posted to the running worker
-// The search's first-play urgency from the demo manifest's `fpuReduction` (null = the historical
-// rule q = 0). A save load clears it in the engine, and demoApplyMatchup sets it again for the tab.
-// The model worker gets it with every search and reports the value it applied (modelWorkerFpu).
-let searchFpuReduction = null;
-let modelWorkerFpu = null;
+// The tab's search settings from the demo manifest. A save load clears them in the engine, and
+// demoApplyMatchup sets them again for the tab. The model worker gets them with every search and
+// reports the values it applied (modelWorkerSettings, null before the first worker search).
+//   fpuReduction: the first-play urgency (null = the historical rule q = 0).
+//   firstMoveRadius: the TEMPORARY demo opening rule (docs/web-demo.md "Opening rule"), which limits
+//   the model's move to cells near the stones while the board holds fewer than 2 stones (null = no
+//   rule). Remove it when a net trained on empty-board starts is pinned.
+const kNoSearchSettings = Object.freeze({ fpuReduction: null, firstMoveRadius: null });
+let searchSettings = kNoSearchSettings;
+let modelWorkerSettings = null;
 
 const modelChannel = createWorkerChannel({
   script: "model-worker.js",
   tag: "model",
   cancelled: Object.freeze({ status: SEARCH_CANCELLED, move: -1 }),
   mapReply: (reply) => {
-    modelWorkerFpu = reply.fpu;
+    modelWorkerSettings = reply.settings;
     return { status: SEARCH_OK, move: reply.move };
   },
   onNewWorker: () => { modelWorkerLoadedGen = -1; },
@@ -4585,13 +4590,31 @@ function setModelWorkerSave(bytes) {
   modelWorkerSave = bytes && modelChannel.usable ? { gen: ++modelSaveGenSeq, blob: new Blob([bytes]) } : null;
 }
 
-// Set the page engine's first-play urgency (a value >= 0, or anything else to clear it). The model
-// worker picks the value up with its next search.
-function setSearchFpuReduction(value) {
-  searchFpuReduction = Number.isFinite(value) && value >= 0 ? value : null;
-  if (typeof Module?._wasm_set_fpu_reduction === "function"
-      && Module._wasm_set_fpu_reduction(searchFpuReduction ?? -1) < 0)
-    console.warn("[model] first-play urgency not set: a search is in flight");
+// Set the page engine's search settings from a matchup's `fpuReduction` (a number >= 0) and
+// `firstMoveRadius` (an integer >= 0). An absent or invalid value clears that setting. The model worker
+// picks the values up with its next search.
+function setSearchSettings(m) {
+  searchSettings = Object.freeze({
+    fpuReduction: Number.isFinite(m?.fpuReduction) && m.fpuReduction >= 0 ? m.fpuReduction : null,
+    firstMoveRadius: Number.isInteger(m?.firstMoveRadius) && m.firstMoveRadius >= 0 ? m.firstMoveRadius : null,
+  });
+  const setters = [
+    ["_wasm_set_fpu_reduction", searchSettings.fpuReduction],
+    ["_wasm_set_first_move_radius", searchSettings.firstMoveRadius],
+  ];
+  for (const [name, value] of setters) {
+    if (typeof Module?.[name] === "function" && Module[name](value ?? -1) < 0)
+      console.warn(`[model] ${name} not applied: a search is in flight`);
+  }
+}
+
+// One search setting as the page engine holds it (`getter` names the wasm export) and as the model
+// worker applied it to its last search (-1 = clear, null = unknown or no worker search yet).
+function searchSettingReport(getter, key) {
+  return {
+    engine: typeof Module?.[getter] === "function" ? Module[getter]() : null,
+    worker: modelWorkerSettings ? modelWorkerSettings[key] : null,
+  };
 }
 
 function canUseModelWorker() {
@@ -4617,7 +4640,7 @@ function requestWorkerModelMove(turnSide, sims) {
       messages.push({ type: "load", gen: save.gen, save: save.blob });
       modelWorkerLoadedGen = save.gen;
     }
-    messages.push({ type: "search", id, gen: save.gen, board: snapshot, turn: turnSide, sims, fpu: searchFpuReduction });
+    messages.push({ type: "search", id, gen: save.gen, board: snapshot, turn: turnSide, sims, settings: searchSettings });
     return messages;
   }, () => selectModelMoveSync(turnSide, sims, snapshot));
 }
@@ -4745,10 +4768,9 @@ function init() {
     invalidate: (msg) => enterNoSaveState(msg || "Load failed."),
     // The first-play urgency the page engine holds and the one the model worker applied to its last
     // search (-1 = clear, null = no worker search yet), for the deploy brief's wiring check.
-    fpuReduction: () => ({
-      engine: typeof Module?._wasm_get_fpu_reduction === "function" ? Module._wasm_get_fpu_reduction() : null,
-      worker: modelWorkerFpu,
-    }),
+    fpuReduction: () => searchSettingReport("_wasm_get_fpu_reduction", "fpuReduction"),
+    // The TEMPORARY opening rule radius, reported the same way (docs/web-demo.md "Opening rule").
+    firstMoveRadius: () => searchSettingReport("_wasm_get_first_move_radius", "firstMoveRadius"),
   };
 
   // Board clicks

@@ -146,11 +146,12 @@
       "source": {
         "metric": "pinned",
         "canonical": "saves/gomoku-step2-s7x64-seed11.sav",
-        "detail": "Operator pin 2026-10-12 after docs/BRIEF-gomoku-deploy.md section 10. Step 2 corpus student s7x64-seed11 (cnn7x64, EMA weights, cpuct 2.5), played with fpuReduction 0 as in its reads. Goal read at 3,200 sims on 800 fresh openings: 0.777 [0.757, 0.797] against Rapfi level 3 (256 nodes), previous pin 0.414. From the empty board with both nets sampling below 4 stones, candidate minus previous pin +0.079 [+0.049, +0.110] against Rapfi level 3. The previous pin saves/gomoku-13x13-cnn8x96-pbt-champion-ema.sav stays in saves/.",
+        "detail": "Operator pin 2026-10-12 after docs/BRIEF-gomoku-deploy.md section 10. Step 2 corpus student s7x64-seed11 (cnn7x64, EMA weights, cpuct 2.5), played with fpuReduction 0 as in its reads. Goal read at 3,200 sims on 800 fresh openings: 0.777 [0.757, 0.797] against Rapfi level 3 (256 nodes), previous pin 0.414. From the empty board with both nets sampling below 4 stones, candidate minus previous pin +0.079 [+0.049, +0.110] against Rapfi level 3. The previous pin saves/gomoku-13x13-cnn8x96-pbt-champion-ema.sav stays in saves/. TEMPORARY opening rule (docs/web-demo.md, Opening rule): firstMoveRadius 2 limits the model's move to cells within Chebyshev distance 2 of a stone, or of the centre on an empty board, while the board holds fewer than 2 stones. The net never trained on positions with 0 or 1 stones (docs/BRIEF-gomoku-deploy.md section 2 erratum), and at one stone its search spreads the visits almost evenly, so as White it answered g7 with c3. Remove firstMoveRadius when a net trained on empty-board starts is pinned.",
         "evalConfig": "sims=3200,fpu=0,openings=goal-read (800 x 2 colours),seed=1",
         "bundledCycles": 0
       },
-      "fpuReduction": 0
+      "fpuReduction": 0,
+      "firstMoveRadius": 2
     }
   ]
 }

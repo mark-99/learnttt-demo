@@ -8,9 +8,11 @@
 // save.
 //
 // Request:  { type: "load", gen, save: Blob }  (no reply; a failure is reported by the next search)
-//           { type: "search", id, gen, board: Int32Array, turn, sims, fpu }
-//           (fpu is the first-play urgency, null for the historical rule q = 0)
-// Response: { id, move, fpu } or { id, error }  (fpu = the value applied, -1 when clear)
+//           { type: "search", id, gen, board: Int32Array, turn, sims, settings }
+//           (settings = { fpuReduction, firstMoveRadius }, each null when clear; fpuReduction is the
+//           first-play urgency and firstMoveRadius the TEMPORARY demo opening rule, see
+//           docs/web-demo.md "Opening rule")
+// Response: { id, move, settings } or { id, error }  (settings = the values applied, -1 when clear)
 "use strict";
 
 importScripts("learnttt.js", "worker-common.js");
@@ -53,9 +55,11 @@ async function search(req) {
     if (req.gen !== loadedGen)
       throw new Error(loadError ? `save not loaded: ${loadError}` : `save generation ${req.gen} not loaded`);
     const M = await getModule();
-    M._wasm_set_fpu_reduction(req.fpu ?? -1);
+    M._wasm_set_fpu_reduction(req.settings?.fpuReduction ?? -1);
+    M._wasm_set_first_move_radius(req.settings?.firstMoveRadius ?? -1);
     const move = M._wasm_select_move(copyBoard(M, req.board), req.turn, req.sims);
-    self.postMessage({ id: req.id, move, fpu: M._wasm_get_fpu_reduction() });
+    const settings = { fpuReduction: M._wasm_get_fpu_reduction(), firstMoveRadius: M._wasm_get_first_move_radius() };
+    self.postMessage({ id: req.id, move, settings });
   } catch (err) {
     self.postMessage({ id: req.id, error: String(err?.message ?? err) });
   }
