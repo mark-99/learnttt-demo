@@ -1460,6 +1460,30 @@ function markHexEdgeCells() {
   }
 }
 
+// The Gomoku grid as one SVG over the board's content box, with a line through each row and column
+// of cell centres. A per-cell 1px background strip can round to zero device pixels when the cell
+// size is fractional (some browser zoom levels), which drops whole lines. An SVG stroke at a
+// fractional position renders anti-aliased instead.
+function buildGomokuGridLines(width, height) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.classList.add("gk-grid");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("aria-hidden", "true");
+  const addLine = (x1, y1, x2, y2) => {
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", String(x1));
+    line.setAttribute("y1", String(y1));
+    line.setAttribute("x2", String(x2));
+    line.setAttribute("y2", String(y2));
+    svg.appendChild(line);
+  };
+  for (let row = 0; row < height; row++) addLine(0.5, row + 0.5, width - 0.5, row + 0.5);
+  for (let col = 0; col < width; col++) addLine(col + 0.5, 0.5, col + 0.5, height - 0.5);
+  return svg;
+}
+
 function buildBoardGrid() {
   boardEl.innerHTML = "";
   cells = new Array(board.length);
@@ -1567,7 +1591,8 @@ function buildBoardGrid() {
     boardEl.style.removeProperty("--hex-h");
     boardEl.style.width = "";
     boardEl.style.height = "";
-    boardEl.style.position = "";
+    boardEl.style.position = "relative";
+    boardEl.appendChild(buildGomokuGridLines(width, height));
 
     const starPoints = new Set();
     if (width >= 13 && height >= 13) {
@@ -1588,10 +1613,6 @@ function buildBoardGrid() {
         cell.dataset.idx = String(idx);
         cell.dataset.row = String(row);
         cell.dataset.col = String(col);
-        if (row === 0) cell.classList.add("gk-top");
-        if (row === height - 1) cell.classList.add("gk-bottom");
-        if (col === 0) cell.classList.add("gk-left");
-        if (col === width - 1) cell.classList.add("gk-right");
         if (starPoints.has(idx)) cell.classList.add("gk-star");
         boardEl.appendChild(cell);
         cells[idx] = cell;

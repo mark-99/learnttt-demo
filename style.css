@@ -998,66 +998,22 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: none;
 }
 
-/* Grid lines through cell centers — four half-line layers anchored from center to each edge */
-.board.gomoku .cell::before {
-  content: "";
+/* Grid lines: one SVG over the board's content box (buildGomokuGridLines in app.js). The inset
+   matches the board's padding, so the lines pass through the cell centres. */
+.board.gomoku .gk-grid {
   position: absolute;
-  inset: 0;
+  inset: 12px;
+  width: calc(100% - 24px);
+  height: calc(100% - 24px);
   pointer-events: none;
   z-index: 0;
-  --gk-line: rgba(0, 0, 0, 0.55);
-  background:
-    linear-gradient(var(--gk-line), var(--gk-line)) right 0 top 50%  / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 0 top 50%   / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% bottom 0 / 1px 50% no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% top 0    / 1px 50% no-repeat;
+  overflow: visible;
 }
 
-/* Edge cells: drop the outward-facing half-line */
-.board.gomoku .cell.gk-left::before {
-  background:
-    linear-gradient(var(--gk-line), var(--gk-line)) right 0 top 50%  / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% bottom 0 / 1px 50% no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% top 0    / 1px 50% no-repeat;
-}
-.board.gomoku .cell.gk-right::before {
-  background:
-    linear-gradient(var(--gk-line), var(--gk-line)) left 0 top 50%   / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% bottom 0 / 1px 50% no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% top 0    / 1px 50% no-repeat;
-}
-.board.gomoku .cell.gk-top::before {
-  background:
-    linear-gradient(var(--gk-line), var(--gk-line)) right 0 top 50%  / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 0 top 50%   / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% bottom 0 / 1px 50% no-repeat;
-}
-.board.gomoku .cell.gk-bottom::before {
-  background:
-    linear-gradient(var(--gk-line), var(--gk-line)) right 0 top 50%  / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 0 top 50%   / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% top 0    / 1px 50% no-repeat;
-}
-/* Corners: only two inward-facing half-lines */
-.board.gomoku .cell.gk-top.gk-left::before {
-  background:
-    linear-gradient(var(--gk-line), var(--gk-line)) right 0 top 50%  / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% bottom 0 / 1px 50% no-repeat;
-}
-.board.gomoku .cell.gk-top.gk-right::before {
-  background:
-    linear-gradient(var(--gk-line), var(--gk-line)) left 0 top 50%   / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% bottom 0 / 1px 50% no-repeat;
-}
-.board.gomoku .cell.gk-bottom.gk-left::before {
-  background:
-    linear-gradient(var(--gk-line), var(--gk-line)) right 0 top 50%  / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% top 0    / 1px 50% no-repeat;
-}
-.board.gomoku .cell.gk-bottom.gk-right::before {
-  background:
-    linear-gradient(var(--gk-line), var(--gk-line)) left 0 top 50%   / 50% 1px no-repeat,
-    linear-gradient(var(--gk-line), var(--gk-line)) left 50% top 0    / 1px 50% no-repeat;
+.board.gomoku .gk-grid line {
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
 }
 
 /* Star points (hoshi) */
