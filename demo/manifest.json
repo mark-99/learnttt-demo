@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-10-12T14:53:33Z",
+  "generated": "2026-10-23T03:47:19Z",
   "wasm": "../learnttt.wasm",
   "_comment": "Web-play demo manifest (docs/PLAN-webui-demo-fbf243.md \u00a75). COPY (labels, order, matchups, sims, blurbs, source detail) is hand-authored and reviewed in git; the identity guards (gameType/boardWidth/boardHeight/winLength) plus bytes/rawBytes/sha256/model/source.canonical are STAMPED by scripts/build-demo-bundle.sh from web/demo/curation-pins.json + the built models. Re-running the build never clobbers copy.",
   "games": [
@@ -129,10 +129,10 @@
       "boardWidth": 13,
       "boardHeight": 13,
       "winLength": 5,
-      "model": "models/gomoku-step2-s7x64-seed11.sav.zst",
-      "bytes": 5328695,
-      "rawBytes": 14693370,
-      "sha256": "48f7a3bb8ef5e7bae9117c7ceaeafb6965e52363477d579af5b856d6a2773c7c",
+      "model": "models/gomoku-step3-prod11.sav.zst",
+      "bytes": 5300057,
+      "rawBytes": 14648782,
+      "sha256": "833c8c1e1900aed38c897f86e91b840316a0ac999290adfba5c3e07c49852fd3",
       "defaultMatchup": {
         "p1": "human",
         "p2": "model"
@@ -141,17 +141,16 @@
       "sims": 3200,
       "simsThreaded": 6400,
       "heuristicPly": 5,
-      "blurb": "AlphaZero-lite 7x64 CNN on 13x13 freestyle Gomoku (five in a row), trained from scratch on the games of a larger 8x96 net. Against the Rapfi engine held to 256 nodes a move it scores 78% from opening positions, where the 8x96 net scores 41%.",
+      "blurb": "AlphaZero-lite 7x64 CNN on 13x13 freestyle Gomoku (five in a row), trained from scratch on the games of a larger 8x96 net and then online against itself and the Rapfi engine. Against Rapfi held to 256 nodes a move it scores 91% from opening positions, where the previous 7x64 net scores 79%.",
       "notice": "This 13x13 net searches 6,400 positions a move. That takes about four seconds on a desktop and longer on laptops and phones. Where the browser runs the search on one thread, it searches 3,200 positions, which takes ten seconds or more.",
       "source": {
         "metric": "pinned",
-        "canonical": "saves/gomoku-step2-s7x64-seed11.sav",
-        "detail": "Operator pin 2026-10-12 after docs/BRIEF-gomoku-deploy.md section 10. Step 2 corpus student s7x64-seed11 (cnn7x64, EMA weights, cpuct 2.5), played with fpuReduction 0 as in its reads. Goal read at 3,200 sims on 800 fresh openings: 0.777 [0.757, 0.797] against Rapfi level 3 (256 nodes), previous pin 0.414. From the empty board with both nets sampling below 4 stones, candidate minus previous pin +0.079 [+0.049, +0.110] against Rapfi level 3. The previous pin saves/gomoku-13x13-cnn8x96-pbt-champion-ema.sav stays in saves/. TEMPORARY opening rule (docs/web-demo.md, Opening rule): firstMoveRadius 2 limits the model's move to cells within Chebyshev distance 2 of a stone, or of the centre on an empty board, while the board holds fewer than 2 stones. The net never trained on positions with 0 or 1 stones (docs/BRIEF-gomoku-deploy.md section 2 erratum), and at one stone its search spreads the visits almost evenly, so as White it answered g7 with c3. Remove firstMoveRadius when a net trained on empty-board starts is pinned.",
-        "evalConfig": "sims=3200,fpu=0,openings=goal-read (800 x 2 colours),seed=1",
-        "bundledCycles": 0
+        "canonical": "saves/gomoku-step3-prod11.sav",
+        "detail": "Operator pin after docs/BRIEF-gomoku-step3-deploy.md section 9. Step 3 online product prod11 (cnn7x64, EMA weights, cpuct 2.5), continued online from the Step 2 student s7x64-seed11 with 1% empty-board starts, played with fpuReduction 0 as in its reads. Goal read at 3,200 sims on 800 fresh openings: 0.910 [0.897, 0.923] against Rapfi level 3 (256 nodes), and candidate minus the previous pin +0.117 [+0.096, +0.138]. From the empty board with both nets sampling below 4 stones, candidate minus previous pin +0.153 [+0.128, +0.178] against Rapfi level 3. At argmax it answers g7 with h8, so the temporary opening rule is removed. The previous pin saves/gomoku-step2-s7x64-seed11.sav stays in saves/.",
+        "evalConfig": "sims=3200,fpu=0,openings=goal-step3 (800 x 2 colours),seed=1",
+        "bundledCycles": 149994
       },
-      "fpuReduction": 0,
-      "firstMoveRadius": 2
+      "fpuReduction": 0
     }
   ]
 }

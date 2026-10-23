@@ -244,8 +244,6 @@ async function selectGame(game) {
     if (Number.isFinite(game.heuristicPly)) matchup.ply = game.heuristicPly;
     // Optional first-play urgency for the tab's net search; without it the engine plays q = 0.
     if (Number.isFinite(game.fpuReduction)) matchup.fpuReduction = game.fpuReduction;
-    // TEMPORARY opening rule radius (docs/web-demo.md "Opening rule"); without it play is unchanged.
-    if (Number.isInteger(game.firstMoveRadius)) matchup.firstMoveRadius = game.firstMoveRadius;
     if (game.neatMember) matchup.neatMember = game.neatMember; // NEAT champion-member pin (TTT)
     const applied = api.applyMatchup(matchup); // sets playerConfig, refreshes controls, starts a new game
     if (!applied || applied.ok !== true) {

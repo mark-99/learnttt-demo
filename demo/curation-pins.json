@@ -104,19 +104,18 @@
         "height": 13,
         "winLength": 5
       },
-      "metric": "pinned (operator decision 2026-10-12, docs/BRIEF-gomoku-deploy.md section 10)",
+      "metric": "pinned (operator decision, docs/BRIEF-gomoku-step3-deploy.md section 9)",
       "csv": null,
-      "pin": "saves/gomoku-step2-s7x64-seed11.sav",
-      "strategy": "ALPHAZERO_CNN cnn7x64 (Step 2 corpus student, EMA weights, cpuct 2.5, fpu reduction 0)",
+      "pin": "saves/gomoku-step3-prod11.sav",
+      "strategy": "ALPHAZERO_CNN cnn7x64 (Step 3 online product prod11, EMA weights, cpuct 2.5, fpu reduction 0)",
       "evalSims": 3200,
       "gatePly": null,
       "strip": true,
-      "approxRawMB_full": 31.4,
-      "approxRawMB_stripped": 14.7,
+      "approxRawMB_full": 251.0,
+      "approxRawMB_stripped": 14.6,
       "approxZstMB": 5.3,
-      "note": "13x13 win-5 (freestyle) cnn7x64 student s7x64-seed11 of Gomoku Step 2 (docs/BRIEF-gomoku-step2-corpus.md), trained 127,568 steps from random weights on a corpus of the cnn8x96 PBT champion's games, EMA weights, cpuct 2.5, played with first-play urgency r = 0 (fpuReduction 0). Goal read (docs/BRIEF-gomoku-goal-read.md section 9): at 3,200 sims, 0.777 [0.757, 0.797] against Rapfi level 3 (256 nodes) on 800 fresh openings, where the previous pin scored 0.414. Deploy brief (docs/BRIEF-gomoku-deploy.md section 10): from the empty board, with both nets sampling below 4 stones, candidate minus the previous pin +0.079 [+0.049, +0.110] against Rapfi level 3 (non-inferiority PASS at 0.05); web r = 0 visits match the native search; a 3,200-sim move takes 1.8 s on 8 workers and 13.3 s on 1. The save header reads cycles 0, which is true for a corpus-trained net. The strip drops the replay buffer, cnn_adam_state and an empty champion pool (31.4MB -> 14.7MB raw / 5.3MB zst). heuristicPly stays 5. Replaced the cnn8x96 PBT champion pin saves/gomoku-13x13-cnn8x96-pbt-champion-ema.sav, which stays in saves/. TEMPORARY opening rule (docs/web-demo.md, Opening rule): firstMoveRadius 2 limits the model's move to cells within Chebyshev distance 2 of a stone, or of the centre on an empty board, while the board holds fewer than 2 stones. The net never trained on positions with 0 or 1 stones (docs/BRIEF-gomoku-deploy.md section 2 erratum), and at one stone its search spreads the visits almost evenly, so as White it answered g7 with c3. Remove firstMoveRadius when a net trained on empty-board starts is pinned.",
-      "fpuReduction": 0,
-      "firstMoveRadius": 2
+      "note": "13x13 win-5 (freestyle) cnn7x64 product prod11 of Gomoku Step 3 (docs/BRIEF-gomoku-step3-online.md), continued online for 150,000 steps from the Step 2 student s7x64-seed11 with self-play, teacher-corpus rows and 15% games against Rapfi level 1, with 1% of its training games started from the empty board. EMA weights, cpuct 2.5, played with first-play urgency r = 0 (fpuReduction 0). Step 3 read (section 11): net alone at 800 sims, the two products minus the two Step 2 students +0.171 [+0.162, +0.180] against Rapfi levels 2 to 4. Deploy brief (docs/BRIEF-gomoku-step3-deploy.md section 9): at 3,200 sims on 800 fresh openings, 0.910 [0.897, 0.923] against Rapfi level 3 (256 nodes), and candidate minus the previous pin +0.117 [+0.096, +0.138] (non-inferiority PASS at 0.025); from the empty board, with both nets sampling below 4 stones, +0.153 [+0.128, +0.178] (non-inferiority PASS at 0.05); at argmax it answers g7 with h8 and opens h8 as Black, so the temporary opening rule is removed; web r = 0 visits match the native search; a 6,400-sim move takes 3.5 s on 8 workers and a 3,200-sim move 12.9 s on 1. The save header reads cycles 149994, its game count. The strip drops the replay buffer, cnn_adam_state and an empty champion pool (251.0MB -> 14.6MB raw / 5.3MB zst). heuristicPly stays 5. Replaced the pin saves/gomoku-step2-s7x64-seed11.sav, which stays in saves/.",
+      "fpuReduction": 0
     }
   }
 }
